@@ -60,6 +60,16 @@ function RequireAuth({ token, children }) {
 function Home({ token }) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
+  const [title, setTitle] = useState("");
+  const WORKOUT_PRESETS = [
+    "Upper Body",
+    "Lower Body",
+    "Push",
+    "Pull",
+    "Legs",
+    "Full Body",
+    "Cardio",
+  ];
 
   async function startWorkout() {
     try {
@@ -69,7 +79,7 @@ function Home({ token }) {
         headers: addAuthHeader(token, {
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({ title: "Evening Workout" }),
+        body: JSON.stringify({ title: title.trim() || "Evening Workout" }),
       });
 
       if (res.status === 401) {
@@ -78,6 +88,13 @@ function Home({ token }) {
         return;
       }
 
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        alert(`Failed to start workout (${res.status}). ${txt}`);
+        return;
+      }
+
+      setTitle("");
       navigate("/history");
     } catch {
       alert("Failed to start workout. Is the backend running on :8000?");
@@ -90,16 +107,27 @@ function Home({ token }) {
     <>
       <h1 className="title">Start Workout</h1>
 
+      <input
+        className="searchBox"
+        list="workout-presets"
+        placeholder="Workout name (choose or type)"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+
+      <datalist id="workout-presets">
+        {WORKOUT_PRESETS.map((p) => (
+          <option value={p} key={p} />
+        ))}
+      </datalist>
+
       <button className="primaryBtn" onClick={startWorkout} disabled={creating}>
         {creating ? "Starting..." : "Start a Workout +"}
       </button>
-
-      <div className="subtle">
-        Protected demo: button POSTs to backend using your JWT token.
-      </div>
     </>
   );
 }
+
 
 function History({ token }) {
   const navigate = useNavigate();
@@ -155,8 +183,6 @@ function History({ token }) {
           ))}
         </div>
       )}
-
-      <div className="footerHint">Backend: {API}</div>
     </>
   );
 }

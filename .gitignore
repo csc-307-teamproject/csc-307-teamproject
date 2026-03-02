@@ -15,3 +15,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# tokens
+packages/express-backend/.env
+
+# workout data
+packages/express-backend/data/workouts.json

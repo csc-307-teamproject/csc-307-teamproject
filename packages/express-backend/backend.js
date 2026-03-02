@@ -16,6 +16,50 @@ const port = 8000;
 app.use(cors());
 app.use(express.json());
 
+// --- per-user exercises (static seed for demo) ---
+const EXERCISES = [
+  {
+    id: "ex-ab-wheel",
+    name: "Ab Wheel",
+    muscleGroup: "Core",
+    image: "ab-wheel.png",
+  },
+  {
+    id: "ex-arnold-press",
+    name: "Arnold Press (Dumbbell)",
+    muscleGroup: "Shoulders",
+    image: "arnold-press.png",
+  },
+  {
+    id: "ex-around-world",
+    name: "Around the World",
+    muscleGroup: "Chest",
+    image: "around-the-world.png",
+  },
+  {
+    id: "ex-back-extension",
+    name: "Back Extension",
+    muscleGroup: "Back",
+    image: "back-extension.png",
+  },
+  {
+    id: "ex-bench-press",
+    name: "Bench Press (Barbell)",
+    muscleGroup: "Chest",
+    image: "bench-press.png",
+  },
+  {
+    id: "ex-bicep-curl",
+    name: "Bicep Curl (Cable)",
+    muscleGroup: "Arms",
+    image: "bicep-curl.png",
+  },
+];
+
+app.get("/api/exercises", authenticateUser, (req, res) => {
+  res.json({ exercises: EXERCISES });
+});
+
 // --- per-user in-memory workout data ---
 function isoDate(daysAgo = 0) {
   const d = new Date();

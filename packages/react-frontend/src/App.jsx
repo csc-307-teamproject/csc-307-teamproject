@@ -32,8 +32,10 @@ function Layout({ children, authed, onLogout, showNav = true }) {
           <Link to="/history" className="navBtn">
             History
           </Link>
-
-          {/* Only show Login when NOT authenticated */}
+          {authed ? (
+  	   <Link to="/exercises" className="navBtn">Exercises</Link>
+	   ) : null}
+        {/* Only show Login when NOT authenticated */}
           {!authed ? (
             <Link to="/login" className="navBtn">
               Login
@@ -215,6 +217,82 @@ export default function App() {
     }
   }
 
+function Exercises({ token }) {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/exercises`, {
+        headers: addAuthHeader(token),
+      });
+
+      if (res.status === 401) {
+        alert("Not authorized. Please log in.");
+        navigate("/login");
+        return;
+      }
+
+      const data = await res.json();
+      setItems(data.exercises ?? []);
+    } catch {
+      alert("Failed to load exercises. Is backend running?");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = items.filter((e) => {
+    const s = `${e.name} ${e.muscleGroup}`.toLowerCase();
+    return s.includes(q.toLowerCase());
+  });
+
+  return (
+    <>
+      <div className="row">
+        <h1 className="title">Exercises</h1>
+        <button className="ghostBtn" onClick={load}>Refresh</button>
+      </div>
+
+      <input
+        className="searchBox"
+        placeholder="Search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+
+      {loading ? (
+        <div className="subtle">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div className="subtle">No matches.</div>
+      ) : (
+        <div className="exerciseList">
+          {filtered.map((ex) => (
+            <div className="exerciseRow" key={ex.id}>
+              <img
+                className="exerciseImg"
+                src={`/src/assets/exercises/${ex.image}`}
+                alt={ex.name}
+              />
+              <div className="exerciseText">
+                <div className="exerciseName">{ex.name}</div>
+                <div className="exerciseSub">{ex.muscleGroup}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
   return (
     <BrowserRouter>
       <Routes>
@@ -228,6 +306,17 @@ export default function App() {
             </Layout>
           }
         />
+
+<Route
+  path="/exercises"
+  element={
+    <Layout authed={!!token} onLogout={logout}>
+      <RequireAuth token={token}>
+        <Exercises token={token} />
+      </RequireAuth>
+    </Layout>
+  }
+/>
 
         <Route
           path="/history"

@@ -256,3 +256,66 @@ body {
   border-color: rgba(44, 255, 136, 0.45);
   box-shadow: 0 0 0 3px rgba(44, 255, 136, 0.08);
 }
+
+.searchBox {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 47, 58, 0.9);
+  background: rgba(15, 17, 21, 0.65);
+  color: var(--text);
+  outline: none;
+}
+
+.searchBox:focus {
+  border-color: rgba(42, 127, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(42, 127, 255, 0.08);
+}
+
+.exerciseList {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(18, 20, 26, 0.65);
+}
+
+.exerciseRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(42, 47, 58, 0.6);
+}
+
+.exerciseRow:last-child {
+  border-bottom: 0;
+}
+
+.exerciseImg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(42, 47, 58, 0.6);
+}
+
+.exerciseText {
+  display: flex;
+  flex-direction: column;
+}
+
+.exerciseName {
+  font-weight: 650;
+}
+
+.exerciseSub {
+  color: var(--muted);
+  margin-top: 2px;
+  font-size: 14px;
+}

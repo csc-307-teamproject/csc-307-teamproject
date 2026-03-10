@@ -4,7 +4,7 @@ import "./App.css";
 import Login from "./Login.jsx";
 import logo from "./assets/dynamicfitlogo.png";
 
-const API = "csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net";
+const API = "https://csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net";
 const TOKEN_KEY = "auth_token";
 
 function Layout({ children, authed, onLogout, showNav = true }) {

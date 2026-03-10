@@ -8,7 +8,7 @@
     "dev": "node backend.js",
     "start": "node backend.js",
     "lint": "eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"(no tests yet)\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

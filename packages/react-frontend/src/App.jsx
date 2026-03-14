@@ -1,11 +1,25 @@
-import {BrowserRouter, Routes, Route, Link, useNavigate, Navigate,} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Login from "./Login.jsx";
 import logo from "./assets/dynamicfitlogo.png";
 
-const API = "https://csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net";
+const API =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV
+    ? "http://localhost:8000"
+    : "https://csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net");
 const TOKEN_KEY = "auth_token";
+const exerciseImageModules = import.meta.glob("./assets/exercises/*", {
+  eager: true,
+  import: "default",
+});
+const exerciseImagesByFile = Object.fromEntries(
+  Object.entries(exerciseImageModules).map(([filePath, assetUrl]) => [
+    filePath.split("/").pop(),
+    assetUrl,
+  ])
+);
 
 function Layout({ children, authed, onLogout, showNav = true }) {
   return (
@@ -33,9 +47,10 @@ function Layout({ children, authed, onLogout, showNav = true }) {
             History
           </Link>
           {authed ? (
-  	   <Link to="/exercises" className="navBtn">Exercises</Link>
-	   ) : null}
-        {/* Only show Login when NOT authenticated */}
+            <Link to="/exercises" className="navBtn">
+              Exercises
+            </Link>
+          ) : null}
           {!authed ? (
             <Link to="/login" className="navBtn">
               Login
@@ -55,6 +70,11 @@ function addAuthHeader(token, otherHeaders = {}) {
 function RequireAuth({ token, children }) {
   if (!token) return <Navigate to="/login" replace />;
   return children;
+}
+
+async function readErrorMessage(response, fallbackMessage) {
+  const text = await response.text().catch(() => "");
+  return text || fallbackMessage;
 }
 
 function Home({ token }) {
@@ -89,15 +109,15 @@ function Home({ token }) {
       }
 
       if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        alert(`Failed to start workout (${res.status}). ${txt}`);
+        const message = await readErrorMessage(res, "Request failed.");
+        alert(`Failed to start workout (${res.status}). ${message}`);
         return;
       }
 
       setTitle("");
       navigate("/history");
     } catch {
-      alert("Failed to start workout. Is the backend running on :8000?");
+      alert("Failed to start workout. Unable to reach the API.");
     } finally {
       setCreating(false);
     }
@@ -128,7 +148,6 @@ function Home({ token }) {
   );
 }
 
-
 function History({ token }) {
   const navigate = useNavigate();
   const [workouts, setWorkouts] = useState([]);
@@ -147,10 +166,16 @@ function History({ token }) {
         return;
       }
 
+      if (!res.ok) {
+        const message = await readErrorMessage(res, "Request failed.");
+        alert(`Failed to load workouts (${res.status}). ${message}`);
+        return;
+      }
+
       const data = await res.json();
       setWorkouts(data.workouts ?? []);
     } catch {
-      alert("Failed to load workouts. Is backend running?");
+      alert("Failed to load workouts. Unable to reach the API.");
     } finally {
       setLoading(false);
     }
@@ -187,62 +212,6 @@ function History({ token }) {
   );
 }
 
-export default function App() {
-  const [token, setToken] = useState(localStorage.getItem(TOKEN_KEY) || "");
-  const [message, setMessage] = useState("");
-  const [redirecting, setRedirecting] = useState(false);
-
-  function saveToken(t) {
-    localStorage.setItem(TOKEN_KEY, t);
-    setToken(t);
-  }
-
-  function logout() {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken("");
-    setMessage("Logged out.");
-  }
-
-  async function loginUser(creds) {
-    setMessage("");
-    const res = await fetch(`${API}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(creds),
-    });
-
-    if (res.status === 200) {
-      const payload = await res.json();
-      saveToken(payload.token);
-      setMessage("Login successful. Redirecting…");
-      setRedirecting(true);
-      setTimeout(() => setRedirecting(false), 900);
-    } else {
-      setMessage(`Login failed (${res.status}).`);
-    }
-  }
-
-  async function signupUser(creds) {
-    setMessage("");
-    const res = await fetch(`${API}/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(creds),
-    });
-
-    if (res.status === 201) {
-      const payload = await res.json();
-      saveToken(payload.token);
-      setMessage("Signup successful. You’re now logged in. Redirecting…");
-      setRedirecting(true);
-      setTimeout(() => setRedirecting(false), 900);
-    } else if (res.status === 409) {
-      setMessage("Username already taken.");
-    } else {
-      setMessage(`Signup failed (${res.status}).`);
-    }
-  }
-
 function Exercises({ token }) {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
@@ -262,10 +231,16 @@ function Exercises({ token }) {
         return;
       }
 
+      if (!res.ok) {
+        const message = await readErrorMessage(res, "Request failed.");
+        alert(`Failed to load exercises (${res.status}). ${message}`);
+        return;
+      }
+
       const data = await res.json();
       setItems(data.exercises ?? []);
     } catch {
-      alert("Failed to load exercises. Is backend running?");
+      alert("Failed to load exercises. Unable to reach the API.");
     } finally {
       setLoading(false);
     }
@@ -304,7 +279,7 @@ function Exercises({ token }) {
             <div className="exerciseRow" key={ex.id}>
               <img
                 className="exerciseImg"
-                src={`/src/assets/exercises/${ex.image}`}
+                src={exerciseImagesByFile[ex.image] || logo}
                 alt={ex.name}
               />
               <div className="exerciseText">
@@ -318,6 +293,72 @@ function Exercises({ token }) {
     </>
   );
 }
+
+export default function App() {
+  const [token, setToken] = useState(localStorage.getItem(TOKEN_KEY) || "");
+  const [message, setMessage] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
+
+  function saveToken(nextToken) {
+    localStorage.setItem(TOKEN_KEY, nextToken);
+    setToken(nextToken);
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken("");
+    setMessage("Logged out.");
+  }
+
+  async function loginUser(creds) {
+    setMessage("");
+
+    try {
+      const res = await fetch(`${API}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+
+      if (res.status === 200) {
+        const payload = await res.json();
+        saveToken(payload.token);
+        setMessage("Login successful. Redirecting…");
+        setRedirecting(true);
+        setTimeout(() => setRedirecting(false), 900);
+      } else {
+        setMessage(`Login failed (${res.status}).`);
+      }
+    } catch {
+      setMessage("Login failed. Unable to reach the API.");
+    }
+  }
+
+  async function signupUser(creds) {
+    setMessage("");
+
+    try {
+      const res = await fetch(`${API}/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+
+      if (res.status === 201) {
+        const payload = await res.json();
+        saveToken(payload.token);
+        setMessage("Signup successful. You’re now logged in. Redirecting…");
+        setRedirecting(true);
+        setTimeout(() => setRedirecting(false), 900);
+      } else if (res.status === 409) {
+        setMessage("Username already taken.");
+      } else {
+        setMessage(`Signup failed (${res.status}).`);
+      }
+    } catch {
+      setMessage("Signup failed. Unable to reach the API.");
+    }
+  }
 
   return (
     <BrowserRouter>
@@ -333,16 +374,16 @@ function Exercises({ token }) {
           }
         />
 
-<Route
-  path="/exercises"
-  element={
-    <Layout authed={!!token} onLogout={logout}>
-      <RequireAuth token={token}>
-        <Exercises token={token} />
-      </RequireAuth>
-    </Layout>
-  }
-/>
+        <Route
+          path="/exercises"
+          element={
+            <Layout authed={!!token} onLogout={logout}>
+              <RequireAuth token={token}>
+                <Exercises token={token} />
+              </RequireAuth>
+            </Layout>
+          }
+        />
 
         <Route
           path="/history"

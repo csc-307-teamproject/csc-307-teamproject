@@ -8,6 +8,8 @@
     "dev": "node backend.js",
     "start": "node backend.js",
     "lint": "eslint .",
+    "seed:exercises": "node scripts/seed-exercises.js",
+    "seed:exercises:wger": "node scripts/seed-exercises.js wger 25",
     "test": "echo \"(no tests yet)\""
   },
   "dependencies": {

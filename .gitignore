@@ -8,6 +8,7 @@ build/
 # env files
 .env
 .env.*
+!**/.env.example
 
 # logs
 npm-debug.log*
@@ -18,5 +19,5 @@ pnpm-debug.log*
 # tokens
 packages/express-backend/.env
 
-# workout data
-packages/express-backend/data/workouts.json
+# backend local data
+packages/express-backend/data/

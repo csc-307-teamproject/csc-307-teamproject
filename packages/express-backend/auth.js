@@ -1,7 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-
-const creds = []; // in-memory users: { username, hashedPassword }
+import { getDataStore } from "./dataStore.js";
 
 function generateAccessToken(username) {
   return new Promise((resolve, reject) => {
@@ -17,43 +16,56 @@ function generateAccessToken(username) {
   });
 }
 
-export function registerUser(req, res) {
-  const { username, pwd } = req.body;
+function normalizeUsername(username) {
+  return String(username ?? "").trim();
+}
+
+export async function registerUser(req, res) {
+  const username = normalizeUsername(req.body?.username);
+  const pwd = String(req.body?.pwd ?? "");
 
   if (!username || !pwd) {
     return res.status(400).send("Bad request: Invalid input data.");
-  }  
-
-  if (creds.find((c) => c.username === username)) {
-    return res.status(409).send("Username already taken");
   }
 
-  bcrypt
-    .genSalt(10)
-    .then((salt) => bcrypt.hash(pwd, salt))
-    .then((hashedPassword) => {
-      creds.push({ username, hashedPassword });
-      return generateAccessToken(username);
-    })
-    .then((token) => res.status(201).send({ token }))
-    .catch(() => res.status(500).send("Server error"));
+  try {
+    const store = await getDataStore();
+    const existingUser = await store.getUserByUsername(username);
+
+    if (existingUser) {
+      return res.status(409).send("Username already taken");
+    }
+
+    const hashedPassword = await bcrypt.hash(pwd, 10);
+    await store.createUser({ username, passwordHash: hashedPassword });
+
+    const token = await generateAccessToken(username);
+    return res.status(201).send({ token });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).send("Username already taken");
+    }
+    return res.status(500).send("Server error");
+  }
 }
 
-export function loginUser(req, res) {
-  const { username, pwd } = req.body;
+export async function loginUser(req, res) {
+  const username = normalizeUsername(req.body?.username);
+  const pwd = String(req.body?.pwd ?? "");
 
-  const retrievedUser = creds.find((c) => c.username === username);
-  if (!retrievedUser) return res.status(401).send("Unauthorized");
+  try {
+    const store = await getDataStore();
+    const retrievedUser = await store.getUserByUsername(username);
+    if (!retrievedUser) return res.status(401).send("Unauthorized");
 
-  bcrypt
-    .compare(pwd, retrievedUser.hashedPassword)
-    .then((matched) => {
-      if (!matched) return res.status(401).send("Unauthorized");
-      return generateAccessToken(username).then((token) =>
-        res.status(200).send({ token })
-      );
-    })
-    .catch(() => res.status(401).send("Unauthorized"));
+    const matched = await bcrypt.compare(pwd, retrievedUser.passwordHash);
+    if (!matched) return res.status(401).send("Unauthorized");
+
+    const token = await generateAccessToken(username);
+    return res.status(200).send({ token });
+  } catch {
+    return res.status(401).send("Unauthorized");
+  }
 }
 
 export function authenticateUser(req, res, next) {

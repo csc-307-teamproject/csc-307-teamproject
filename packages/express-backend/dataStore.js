@@ -37,12 +37,22 @@ function sortWorkouts(workouts) {
 function createFileStore() {
   return {
     mode: "file",
-    async getUserByUsername(username) {
+    async getUserByEmail(email) {
       const users = await readJson(USERS_FILE, []);
-      return users.find((user) => user.username === username) ?? null;
+      return users.find((user) => user.email === email || user.username === email) ?? null;
     },
     async createUser(user) {
       const users = await readJson(USERS_FILE, []);
+      const existingUser = users.find(
+        (record) => record.email === user.email || record.username === user.email
+      );
+
+      if (existingUser) {
+        const error = new Error("Email already registered");
+        error.code = "E_DUPLICATE_EMAIL";
+        throw error;
+      }
+
       users.push({
         ...user,
         createdAt: new Date().toISOString(),
@@ -66,14 +76,27 @@ function createFileStore() {
       await writeJson(EXERCISES_FILE, sortExercises(exercises));
       return exercises.length;
     },
-    async listWorkoutsByUsername(username) {
+    async listWorkoutsByEmail(email) {
       const store = await readJson(WORKOUTS_FILE, {});
-      return sortWorkouts(store[username] ?? []);
+      const workouts = Object.entries(store).flatMap(([owner, items]) =>
+        (items ?? []).map((workout) => ({
+          ...workout,
+          owner,
+          email: workout.email || workout.username || owner,
+        }))
+      );
+
+      return sortWorkouts(
+        workouts.filter(
+          (workout) =>
+            workout.email === email || workout.username === email || workout.owner === email
+        )
+      );
     },
     async createWorkout(workout) {
       const store = await readJson(WORKOUTS_FILE, {});
-      const current = store[workout.username] ?? [];
-      store[workout.username] = sortWorkouts([workout, ...current]);
+      const current = store[workout.email] ?? [];
+      store[workout.email] = sortWorkouts([workout, ...current]);
       await writeJson(WORKOUTS_FILE, store);
       return workout;
     },
@@ -102,14 +125,21 @@ async function createMongoStore() {
 
   await Promise.all([
     users.createIndex({ username: 1 }, { unique: true }),
+    users.createIndex(
+      { email: 1 },
+      { unique: true, partialFilterExpression: { email: { $type: "string" } } }
+    ),
     workouts.createIndex({ username: 1, date: -1 }),
+    workouts.createIndex({ email: 1, date: -1 }),
     exercises.createIndex({ id: 1 }, { unique: true }),
   ]);
 
   return {
     mode: "mongo",
-    async getUserByUsername(username) {
-      return users.findOne({ username });
+    async getUserByEmail(email) {
+      return users.findOne({
+        $or: [{ email }, { username: email }],
+      });
     },
     async createUser(user) {
       const record = {
@@ -139,8 +169,13 @@ async function createMongoStore() {
       }
       return seedData.length;
     },
-    async listWorkoutsByUsername(username) {
-      return workouts.find({ username }).sort({ date: -1 }).toArray();
+    async listWorkoutsByEmail(email) {
+      return workouts
+        .find({
+          $or: [{ email }, { username: email }],
+        })
+        .sort({ date: -1 })
+        .toArray();
     },
     async createWorkout(workout) {
       await workouts.insertOne(workout);

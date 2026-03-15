@@ -3,7 +3,12 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { authenticateUser, registerUser, loginUser } from "./auth.js";
 import { closeDataStore, getDataStore } from "./dataStore.js";
-import { LOCAL_EXERCISE_SEED, normalizeExerciseSeed } from "./exerciseSeedData.js";
+import {
+  curateExerciseCatalog,
+  LOCAL_EXERCISE_SEED,
+  fetchWgerExercises,
+  normalizeExerciseSeed,
+} from "./exerciseSeedData.js";
 
 dotenv.config();
 
@@ -14,6 +19,8 @@ if (!process.env.TOKEN_SECRET) {
 
 const app = express();
 const port = 8000;
+const REMOTE_EXERCISE_TARGET = 400;
+const REMOTE_EXERCISE_MINIMUM = 120;
 
 app.use(cors());
 app.use(express.json());
@@ -25,11 +32,49 @@ function isoDate(daysAgo = 0) {
   return d.toISOString().slice(0, 10);
 }
 
+function sanitizeText(value, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function normalizeWorkoutExercises(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .map((exercise, index) => {
+      const name = sanitizeText(exercise?.name);
+      if (!name) {
+        return null;
+      }
+
+      return {
+        id: sanitizeText(exercise?.id, `entry-${index + 1}`),
+        exerciseId: sanitizeText(exercise?.exerciseId || exercise?.id),
+        name,
+        muscleGroup: sanitizeText(exercise?.muscleGroup, "General"),
+        sets: sanitizeText(exercise?.sets),
+        reps: sanitizeText(exercise?.reps),
+        weight: sanitizeText(exercise?.weight),
+        notes: sanitizeText(exercise?.notes),
+      };
+    })
+    .filter(Boolean);
+}
+
 function toPublicWorkout(workout) {
   return {
     id: workout.id,
     date: workout.date,
     title: workout.title,
+    exerciseCount: Array.isArray(workout.exercises) ? workout.exercises.length : 0,
+    exerciseNames: Array.isArray(workout.exercises)
+      ? workout.exercises
+          .map((exercise) => exercise?.name)
+          .filter(Boolean)
+          .slice(0, 3)
+      : [],
   };
 }
 
@@ -42,15 +87,80 @@ function toPublicExercise(exercise) {
   };
 }
 
+function mergeExerciseCatalog(remoteExercises) {
+  const localExercises = LOCAL_EXERCISE_SEED.map((item) => normalizeExerciseSeed(item));
+  return curateExerciseCatalog([...remoteExercises, ...localExercises]);
+}
+
+async function ensureExerciseCatalog(store) {
+  const storedExercises = await store.listExercises();
+  const currentExercises = curateExerciseCatalog(storedExercises);
+  const hasRemoteCatalog =
+    currentExercises.length >= REMOTE_EXERCISE_MINIMUM &&
+    currentExercises.some((exercise) => exercise.source === "wger");
+  const catalogNeedsCleanup = currentExercises.length !== storedExercises.length;
+
+  if (hasRemoteCatalog && !catalogNeedsCleanup) {
+    return currentExercises.length;
+  }
+
+  try {
+    const remoteExercises = await fetchWgerExercises(REMOTE_EXERCISE_TARGET, {
+      signal: AbortSignal.timeout(10000),
+    });
+    const mergedExercises = mergeExerciseCatalog(remoteExercises);
+    await store.replaceExercises(mergedExercises);
+    return mergedExercises.length;
+  } catch (error) {
+    if (currentExercises.length > 0) {
+      if (catalogNeedsCleanup) {
+        await store.replaceExercises(currentExercises);
+      }
+      console.warn(`Exercise catalog sync skipped: ${error.message}`);
+      return currentExercises.length;
+    }
+
+    const localSeed = curateExerciseCatalog(
+      LOCAL_EXERCISE_SEED.map((exercise) => normalizeExerciseSeed(exercise))
+    );
+    await store.replaceExercises(localSeed);
+    console.warn(`Exercise catalog fell back to bundled seed: ${error.message}`);
+    return localSeed.length;
+  }
+}
+
 app.get("/", (req, res) => res.send("Backend OK"));
 app.post("/signup", registerUser);
 app.post("/login", loginUser);
 
+app.get("/api/me", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const email = req.user.email;
+    const [user, workouts, exercises] = await Promise.all([
+      store.getUserByEmail(email),
+      store.listWorkoutsByEmail(email),
+      store.listExercises(),
+    ]);
+
+    res.json({
+      email,
+      createdAt: user?.createdAt || null,
+      workoutCount: workouts.length,
+      exerciseCount: exercises.length,
+      storageMode: store.mode,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load profile" });
+  }
+});
+
 app.get("/api/workouts", authenticateUser, async (req, res) => {
   try {
     const store = await getDataStore();
-    const username = req.user.username;
-    const workouts = await store.listWorkoutsByUsername(username);
+    const email = req.user.email;
+    const workouts = await store.listWorkoutsByEmail(email);
     res.json({ workouts: workouts.map(toPublicWorkout) });
   } catch (err) {
     console.error(err);
@@ -61,16 +171,22 @@ app.get("/api/workouts", authenticateUser, async (req, res) => {
 app.post("/api/workouts", authenticateUser, async (req, res) => {
   try {
     const store = await getDataStore();
-    const username = req.user.username;
+    const email = req.user.email;
+    const title = sanitizeText(req.body?.title, "Evening Workout");
+    const exercises = normalizeWorkoutExercises(req.body?.exercises);
 
-    const title =
-      (req.body?.title && String(req.body.title).trim()) || "Evening Workout";
+    if (exercises.length === 0) {
+      res.status(400).json({ error: "A workout must include at least one exercise" });
+      return;
+    }
 
     const newWorkout = {
       id: crypto.randomUUID(),
-      username,
+      email,
+      username: email,
       date: isoDate(0),
       title,
+      exercises,
       createdAt: new Date().toISOString(),
     };
 
@@ -96,12 +212,12 @@ app.get("/api/exercises", authenticateUser, async (req, res) => {
 async function startServer() {
   try {
     const store = await getDataStore();
-    await store.seedExercises(
-      LOCAL_EXERCISE_SEED.map((exercise) => normalizeExerciseSeed(exercise))
-    );
+    const exerciseCount = await ensureExerciseCatalog(store);
 
     const server = app.listen(process.env.PORT || port, () => {
-      console.log(`REST API is listening in ${store.mode} mode.`);
+      console.log(
+        `REST API is listening in ${store.mode} mode with ${exerciseCount} exercises.`
+      );
     });
 
     async function shutdown() {

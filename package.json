@@ -29,5 +29,8 @@
   "homepage": "https://github.com/june-core/csc-307-teamproject#readme",
   "devDependencies": {
     "prettier": "^3.8.1"
+  },
+  "dependencies": {
+    "mongodb": "^7.1.0"
   }
 }

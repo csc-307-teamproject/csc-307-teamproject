@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import { getDataStore } from "./dataStore.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DEFAULT_REMINDER_TIME = "18:00";
 
 function generateAccessToken(email) {
   return new Promise((resolve, reject) => {
@@ -51,8 +50,6 @@ export async function registerUser(req, res) {
       bodyWeight: null,
       bodyWeightUnit: "lb",
       weeklyGoal: 3,
-      remindersEnabled: false,
-      reminderTime: DEFAULT_REMINDER_TIME,
     });
 
     const token = await generateAccessToken(email);

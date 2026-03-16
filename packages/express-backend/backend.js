@@ -28,8 +28,6 @@ const DEFAULT_SETTINGS = {
   bodyWeight: null,
   bodyWeightUnit: "lb",
   weeklyGoal: 3,
-  remindersEnabled: false,
-  reminderTime: "18:00",
 };
 
 app.use(cors());
@@ -51,12 +49,6 @@ function isValidUnit(value) {
   return value === "lb" || value === "kg";
 }
 
-function normalizeReminderTime(value) {
-  const normalized = sanitizeText(value, DEFAULT_SETTINGS.reminderTime);
-  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(normalized)
-    ? normalized
-    : DEFAULT_SETTINGS.reminderTime;
-}
 
 function parseOptionalBodyWeight(value) {
   if (value === null || value === undefined || value === "") {
@@ -92,8 +84,9 @@ function toPublicSettings(user) {
         ? user.preferredUnit
         : DEFAULT_SETTINGS.bodyWeightUnit,
     weeklyGoal: parseWeeklyGoal(user?.weeklyGoal) ?? DEFAULT_SETTINGS.weeklyGoal,
-    remindersEnabled: Boolean(user?.remindersEnabled),
-    reminderTime: normalizeReminderTime(user?.reminderTime),
+    prBench: user?.prBench != null ? String(user.prBench) : "",
+    prSquat: user?.prSquat != null ? String(user.prSquat) : "",
+    prDeadlift: user?.prDeadlift != null ? String(user.prDeadlift) : "",
   };
 }
 
@@ -133,14 +126,9 @@ function parseSettingsUpdate(body, currentSettings) {
     bodyWeight: body?.bodyWeight !== undefined ? nextBodyWeight : currentSettings.bodyWeight,
     bodyWeightUnit: bodyWeightUnit ?? currentSettings.bodyWeightUnit,
     weeklyGoal: weeklyGoal !== undefined ? parseWeeklyGoal(weeklyGoal) : currentSettings.weeklyGoal,
-    remindersEnabled:
-      body?.remindersEnabled !== undefined
-        ? Boolean(body.remindersEnabled)
-        : currentSettings.remindersEnabled,
-    reminderTime:
-      body?.reminderTime !== undefined
-        ? normalizeReminderTime(body.reminderTime)
-        : currentSettings.reminderTime,
+    prBench: body?.prBench !== undefined ? String(body.prBench) : currentSettings.prBench,
+    prSquat: body?.prSquat !== undefined ? String(body.prSquat) : currentSettings.prSquat,
+    prDeadlift: body?.prDeadlift !== undefined ? String(body.prDeadlift) : currentSettings.prDeadlift,
   };
 }
 
@@ -181,7 +169,6 @@ function toPublicWorkout(workout) {
       ? workout.exercises
           .map((exercise) => exercise?.name)
           .filter(Boolean)
-          .slice(0, 3)
       : [],
   };
 }

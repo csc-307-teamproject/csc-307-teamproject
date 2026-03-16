@@ -23,8 +23,9 @@ const DEFAULT_SETTINGS = {
   bodyWeight: "",
   bodyWeightUnit: "lb",
   weeklyGoal: 3,
-  remindersEnabled: false,
-  reminderTime: "18:00",
+  prBench: "",
+  prSquat: "",
+  prDeadlift: "",
 };
 const WORKOUT_PRESETS = [
   "Upper Body",
@@ -452,7 +453,7 @@ function getProfileAnalytics(workouts, weeklyGoal) {
     longestStreak,
     workoutsThisWeekCount: workoutsThisWeek.length,
     lastWorkoutDate,
-    recentWorkouts: workouts.slice(0, 5),
+    recentWorkouts: workouts.slice(0, 3),
     weeklyGoalProgress: Math.min(
       100,
       Math.round((workoutsThisWeek.length / Math.max(weeklyGoal, 1)) * 100)
@@ -474,8 +475,9 @@ function toFormSettings(settings) {
       Number.isInteger(normalizedWeeklyGoal) && normalizedWeeklyGoal >= 1
         ? normalizedWeeklyGoal
         : DEFAULT_SETTINGS.weeklyGoal,
-    remindersEnabled: Boolean(settings?.remindersEnabled),
-    reminderTime: settings?.reminderTime || DEFAULT_SETTINGS.reminderTime,
+    prBench: settings?.prBench != null ? String(settings.prBench) : "",
+    prSquat: settings?.prSquat != null ? String(settings.prSquat) : "",
+    prDeadlift: settings?.prDeadlift != null ? String(settings.prDeadlift) : "",
   };
 }
 
@@ -1725,6 +1727,34 @@ function Profile({ token }) {
                 </div>
               )}
             </section>
+
+            <section className="panel profileWideCard">
+              <div className="sectionTitle">Personal Records</div>
+              {!profileData.settings.prBench && !profileData.settings.prSquat && !profileData.settings.prDeadlift ? (
+                <div className="subtle">No PRs logged yet. Add them in Settings.</div>
+              ) : (
+                <div className="statGrid">
+                  <div className="statCard">
+                    <div className="statLabel">Bench Press</div>
+                    <div className="statValue">
+                      {profileData.settings.prBench || "—"}{profileData.settings.prBench ? ` ${profileData.settings.preferredUnit}` : ""}
+                    </div>
+                  </div>
+                  <div className="statCard">
+                    <div className="statLabel">Squat</div>
+                    <div className="statValue">
+                      {profileData.settings.prSquat || "—"}{profileData.settings.prSquat ? ` ${profileData.settings.preferredUnit}` : ""}
+                    </div>
+                  </div>
+                  <div className="statCard">
+                    <div className="statLabel">Deadlift</div>
+                    <div className="statValue">
+                      {profileData.settings.prDeadlift || "—"}{profileData.settings.prDeadlift ? ` ${profileData.settings.preferredUnit}` : ""}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       )}
@@ -1800,8 +1830,9 @@ function Settings({ token, onLogout }) {
         bodyWeight: settings.bodyWeight === "" ? null : Number(settings.bodyWeight),
         bodyWeightUnit: settings.bodyWeightUnit,
         weeklyGoal: Number(settings.weeklyGoal),
-        remindersEnabled: settings.remindersEnabled,
-        reminderTime: settings.reminderTime,
+        prBench: settings.prBench,
+        prSquat: settings.prSquat,
+        prDeadlift: settings.prDeadlift,
       });
 
       if (!savedSettings) {
@@ -1968,27 +1999,46 @@ function Settings({ token, onLogout }) {
           </section>
 
           <section className="panel">
-            <div className="sectionTitle">Reminder Preference</div>
-            <div className="helperText">Even without push notifications yet, this keeps your preferred workout reminder ready.</div>
-            <label className="toggleRow">
-              <input
-                type="checkbox"
-                checked={settings.remindersEnabled}
-                onChange={(event) => updateSettings("remindersEnabled", event.target.checked)}
-              />
-              <span>Enable workout reminders</span>
-            </label>
-
-            <label className="settingsField">
-              Reminder time
-              <input
-                className="fieldInput"
-                type="time"
-                value={settings.reminderTime}
-                disabled={!settings.remindersEnabled}
-                onChange={(event) => updateSettings("reminderTime", event.target.value)}
-              />
-            </label>
+            <div className="sectionTitle">Personal Records</div>
+            <div className="helperText">Log your best lifts. These will appear on your Dashboard.</div>
+            <div className="inlineFields">
+              <label className="settingsField">
+                Bench Press ({settings.preferredUnit})
+                <input
+                  className="fieldInput"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={settings.prBench}
+                  onChange={(event) => updateSettings("prBench", event.target.value)}
+                  placeholder="e.g. 225"
+                />
+              </label>
+              <label className="settingsField">
+                Squat ({settings.preferredUnit})
+                <input
+                  className="fieldInput"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={settings.prSquat}
+                  onChange={(event) => updateSettings("prSquat", event.target.value)}
+                  placeholder="e.g. 315"
+                />
+              </label>
+              <label className="settingsField">
+                Deadlift ({settings.preferredUnit})
+                <input
+                  className="fieldInput"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={settings.prDeadlift}
+                  onChange={(event) => updateSettings("prDeadlift", event.target.value)}
+                  placeholder="e.g. 405"
+                />
+              </label>
+            </div>
           </section>
 
           <div className="settingsActions">
@@ -2041,7 +2091,7 @@ function Settings({ token, onLogout }) {
               </label>
             </div>
 
-            <div className="settingsActions">
+            <div className="settingsActions" style={{ marginTop: "16px" }}>
               <button className="ghostBtn" onClick={changePassword}>
                 Change Password
               </button>

@@ -363,12 +363,13 @@ app.post("/api/workouts", authenticateUser, async (req, res) => {
     }
 
     const duration = Number.isFinite(req.body?.duration) ? Math.round(req.body.duration) : null;
+    const clientDate = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.date) ? req.body.date : isoDate(0);
 
     const newWorkout = {
       id: crypto.randomUUID(),
       email,
       username: email,
-      date: isoDate(0),
+      date: clientDate,
       title,
       exercises,
       duration,

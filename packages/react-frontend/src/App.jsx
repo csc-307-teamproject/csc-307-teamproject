@@ -55,10 +55,10 @@ function resolveApiBase() {
   return import.meta.env.DEV ? "" : PRODUCTION_API;
 }
 
-function Layout({ children, authed, onLogout, showNav = true }) {
+function Layout({ children, authed, showNav = true }) {
   const navItems = [
-    { to: "/profile", label: "Profile" },
-    { to: "/", label: "Home" },
+    { to: "/profile", label: "Dashboard" },
+    { to: "/", label: "New" },
     { to: "/history", label: "History" },
     { to: "/exercises", label: "Exercises" },
     { to: "/settings", label: "Settings" },
@@ -67,15 +67,7 @@ function Layout({ children, authed, onLogout, showNav = true }) {
   return (
     <div className="appShell">
       <div className="screen">
-        <div className="topBar">
-          {authed ? (
-            <button className="ghostBtn" onClick={onLogout}>
-              Log out
-            </button>
-          ) : (
-            <span />
-          )}
-        </div>
+        <div className="topBar"></div>
 
         {children}
       </div>
@@ -533,7 +525,6 @@ function History({ token }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
   const [deletingId, setDeletingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -601,16 +592,11 @@ function History({ token }) {
     return () => {
       ignore = true;
     };
-  }, [navigate, refreshKey, token]);
+  }, [navigate, token]);
 
   return (
     <div className="pageWrap">
-      <div className="row">
-        <h1 className="title">Workout History</h1>
-        <button className="ghostBtn" onClick={() => setRefreshKey((value) => value + 1)}>
-          Refresh
-        </button>
-      </div>
+      <h1 className="title">Workout History</h1>
 
       <div className="pageIntro">Finished workouts appear here as soon as you save them.</div>
 
@@ -677,8 +663,6 @@ function Exercises({ token }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refreshKey, setRefreshKey] = useState(0);
-
   useEffect(() => {
     let ignore = false;
 
@@ -713,7 +697,7 @@ function Exercises({ token }) {
     return () => {
       ignore = true;
     };
-  }, [navigate, refreshKey, token]);
+  }, [navigate, token]);
 
   const catalog = prepareExercises(items);
   const filteredExercises = catalog.filter((exercise) => {
@@ -724,14 +708,9 @@ function Exercises({ token }) {
 
   return (
     <div className="pageWrap">
-      <div className="row">
-        <div>
-          <h1 className="title">Exercises</h1>
-          <div className="subtle compact">{catalog.length} clean exercises in your catalog</div>
-        </div>
-        <button className="ghostBtn" onClick={() => setRefreshKey((value) => value + 1)}>
-          Refresh
-        </button>
+      <div>
+        <h1 className="title">Exercises</h1>
+        <div className="subtle compact">{catalog.length} clean exercises in your catalog</div>
       </div>
 
       <div className="pageIntro">
@@ -889,6 +868,7 @@ function CreateWorkout({ token }) {
           title: title.trim() || "Evening Workout",
           exercises: selectedExercises,
           duration: elapsedSeconds,
+          date: toDateKey(new Date()),
         }),
       });
 
@@ -1331,7 +1311,6 @@ function Profile({ token }) {
     exerciseCount: 0,
     settings: DEFAULT_SETTINGS,
   });
-  const [refreshKey, setRefreshKey] = useState(0);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
     displayName: "",
@@ -1391,7 +1370,7 @@ function Profile({ token }) {
     return () => {
       ignore = true;
     };
-  }, [navigate, refreshKey, token]);
+  }, [navigate, token]);
 
   const analytics = getProfileAnalytics(
     profileData.workouts,
@@ -1479,7 +1458,6 @@ function Profile({ token }) {
       }));
       setGoalDraft(nextGoal);
       setProfileMessage("Weekly goal updated.");
-      setRefreshKey((value) => value + 1);
     } catch (saveError) {
       setError(saveError.message || "Failed to save weekly goal.");
     } finally {
@@ -1489,16 +1467,8 @@ function Profile({ token }) {
 
   return (
     <div className="pageWrap">
-      <div className="row">
-        <h1 className="title">Profile</h1>
-        <button className="ghostBtn" onClick={() => setRefreshKey((value) => value + 1)}>
-          Refresh
-        </button>
-      </div>
+      <h1 className="title">Profile</h1>
 
-      <div className="pageIntro">
-        This profile belongs to the currently signed-in account and stays unique to that user.
-      </div>
 
       {error ? <div className="errorBanner">{error}</div> : null}
       {profileMessage ? <div className="flashMessage">{profileMessage}</div> : null}
@@ -1762,7 +1732,7 @@ function Profile({ token }) {
   );
 }
 
-function Settings({ token }) {
+function Settings({ token, onLogout }) {
   const navigate = useNavigate();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -2077,6 +2047,15 @@ function Settings({ token }) {
               </button>
             </div>
           </section>
+
+          <section className="panel">
+            <div className="sectionTitle">Account</div>
+            <div className="settingsActions">
+              <button className="ghostBtn" onClick={onLogout}>
+                Log Out
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>
@@ -2182,7 +2161,7 @@ export default function App() {
         <Route
           path="/"
           element={
-            <Layout authed={!!token} onLogout={logout}>
+            <Layout authed={!!token}>
               <RequireAuth token={token}>
                 <Home />
               </RequireAuth>
@@ -2193,7 +2172,7 @@ export default function App() {
         <Route
           path="/create-workout"
           element={
-            <Layout authed={!!token} onLogout={logout} showNav={false}>
+            <Layout authed={!!token} showNav={false}>
               <RequireAuth token={token}>
                 <CreateWorkout token={token} />
               </RequireAuth>
@@ -2204,7 +2183,7 @@ export default function App() {
         <Route
           path="/edit-workout/:id"
           element={
-            <Layout authed={!!token} onLogout={logout} showNav={false}>
+            <Layout authed={!!token} showNav={false}>
               <RequireAuth token={token}>
                 <EditWorkout token={token} />
               </RequireAuth>
@@ -2215,7 +2194,7 @@ export default function App() {
         <Route
           path="/profile"
           element={
-            <Layout authed={!!token} onLogout={logout}>
+            <Layout authed={!!token}>
               <RequireAuth token={token}>
                 <Profile token={token} />
               </RequireAuth>
@@ -2226,7 +2205,7 @@ export default function App() {
         <Route
           path="/history"
           element={
-            <Layout authed={!!token} onLogout={logout}>
+            <Layout authed={!!token}>
               <RequireAuth token={token}>
                 <History token={token} />
               </RequireAuth>
@@ -2237,7 +2216,7 @@ export default function App() {
         <Route
           path="/exercises"
           element={
-            <Layout authed={!!token} onLogout={logout}>
+            <Layout authed={!!token}>
               <RequireAuth token={token}>
                 <Exercises token={token} />
               </RequireAuth>
@@ -2248,9 +2227,9 @@ export default function App() {
         <Route
           path="/settings"
           element={
-            <Layout authed={!!token} onLogout={logout}>
+            <Layout authed={!!token}>
               <RequireAuth token={token}>
-                <Settings token={token} />
+                <Settings token={token} onLogout={logout} />
               </RequireAuth>
             </Layout>
           }
@@ -2259,7 +2238,7 @@ export default function App() {
         <Route
           path="/login"
           element={
-            <Layout authed={!!token} onLogout={logout} showNav={false}>
+            <Layout authed={!!token} showNav={false}>
               {token && redirecting ? (
                 <div className="subtle centerMsg">{message}</div>
               ) : token ? (

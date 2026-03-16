@@ -193,12 +193,17 @@ async function createMongoStore() {
       return record;
     },
     async updateUserByEmail(email, updates) {
-      const result = await users.findOneAndUpdate(
+      const result = await users.updateOne(
         { $or: [{ email }, { username: email }] },
-        { $set: updates },
-        { returnDocument: "after" }
+        { $set: updates }
       );
-      return result || null;
+      if (!result.matchedCount) {
+        return null;
+      }
+
+      return users.findOne({
+        $or: [{ email }, { username: email }],
+      });
     },
     async listExercises() {
       return exercises.find({}).sort({ name: 1 }).toArray();

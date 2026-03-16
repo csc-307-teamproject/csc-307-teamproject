@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   displayName: "",
   bodyWeight: null,
   bodyWeightUnit: "lb",
+  weeklyGoal: 3,
   remindersEnabled: false,
   reminderTime: "18:00",
 };
@@ -70,6 +71,15 @@ function parseOptionalBodyWeight(value) {
   return Math.round(numericValue * 10) / 10;
 }
 
+function parseWeeklyGoal(value) {
+  const numericValue = Number(value);
+  if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 14) {
+    return null;
+  }
+
+  return numericValue;
+}
+
 function toPublicSettings(user) {
   const bodyWeight = parseOptionalBodyWeight(user?.bodyWeight);
   return {
@@ -81,6 +91,7 @@ function toPublicSettings(user) {
       : isValidUnit(user?.preferredUnit)
         ? user.preferredUnit
         : DEFAULT_SETTINGS.bodyWeightUnit,
+    weeklyGoal: parseWeeklyGoal(user?.weeklyGoal) ?? DEFAULT_SETTINGS.weeklyGoal,
     remindersEnabled: Boolean(user?.remindersEnabled),
     reminderTime: normalizeReminderTime(user?.reminderTime),
   };
@@ -89,6 +100,7 @@ function toPublicSettings(user) {
 function parseSettingsUpdate(body, currentSettings) {
   const preferredUnit = body?.preferredUnit;
   const bodyWeightUnit = body?.bodyWeightUnit;
+  const weeklyGoal = body?.weeklyGoal;
 
   if (preferredUnit !== undefined && !isValidUnit(preferredUnit)) {
     throw new Error("Preferred unit must be 'lb' or 'kg'.");
@@ -96,6 +108,10 @@ function parseSettingsUpdate(body, currentSettings) {
 
   if (bodyWeightUnit !== undefined && !isValidUnit(bodyWeightUnit)) {
     throw new Error("Body weight unit must be 'lb' or 'kg'.");
+  }
+
+  if (weeklyGoal !== undefined && parseWeeklyGoal(weeklyGoal) === null) {
+    throw new Error("Weekly goal must be an integer between 1 and 14.");
   }
 
   const nextBodyWeight = parseOptionalBodyWeight(body?.bodyWeight);
@@ -116,6 +132,7 @@ function parseSettingsUpdate(body, currentSettings) {
     preferredUnit: preferredUnit ?? currentSettings.preferredUnit,
     bodyWeight: body?.bodyWeight !== undefined ? nextBodyWeight : currentSettings.bodyWeight,
     bodyWeightUnit: bodyWeightUnit ?? currentSettings.bodyWeightUnit,
+    weeklyGoal: weeklyGoal !== undefined ? parseWeeklyGoal(weeklyGoal) : currentSettings.weeklyGoal,
     remindersEnabled:
       body?.remindersEnabled !== undefined
         ? Boolean(body.remindersEnabled)

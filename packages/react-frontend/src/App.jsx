@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
   displayName: "",
   bodyWeight: "",
   bodyWeightUnit: "lb",
+  weeklyGoal: 3,
   remindersEnabled: false,
   reminderTime: "18:00",
 };
@@ -154,6 +155,29 @@ async function fetchJson(url, token, navigate, fallbackMessage) {
   return response.json();
 }
 
+async function saveSettingsRequest(token, navigate, settingsPatch) {
+  const response = await fetch(`${API}/api/settings`, {
+    method: "PUT",
+    headers: addAuthHeader(token, {
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify(settingsPatch),
+  });
+
+  if (response.status === 401) {
+    alert("Session expired. Please log in again.");
+    navigate("/login");
+    return null;
+  }
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response, "Failed to save settings.");
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
 function parseTokenPayload(token) {
   if (!token) {
     return null;
@@ -274,7 +298,178 @@ function formatDuration(seconds) {
   return `${hours}:${minutes}:${secs}`;
 }
 
+function formatDisplayDate(value) {
+  if (!value) {
+    return "No workouts yet";
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMonthDay(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function toDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateKey(value) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function addDays(date, amount) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + amount);
+  return nextDate;
+}
+
+function startOfWeek(date) {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay();
+  const distanceFromMonday = (day + 6) % 7;
+  nextDate.setDate(nextDate.getDate() - distanceFromMonday);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function buildWorkoutMap(workouts) {
+  const map = new Map();
+
+  for (const workout of workouts) {
+    const current = map.get(workout.date) || [];
+    current.push(workout);
+    map.set(workout.date, current);
+  }
+
+  return map;
+}
+
+function buildHeatmapDays(workoutMap, weeks = 12) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = startOfWeek(addDays(today, -(weeks * 7) + 1));
+  const days = [];
+
+  for (
+    let cursor = new Date(startDate);
+    cursor <= today;
+    cursor = addDays(cursor, 1)
+  ) {
+    const key = toDateKey(cursor);
+    const count = workoutMap.get(key)?.length ?? 0;
+    days.push({
+      date: key,
+      count,
+    });
+  }
+
+  return days;
+}
+
+function calculateStreaks(workoutDates) {
+  const uniqueDates = [...new Set(workoutDates)].sort();
+  if (uniqueDates.length === 0) {
+    return { currentStreak: 0, longestStreak: 0 };
+  }
+
+  let longestStreak = 1;
+  let runningStreak = 1;
+
+  for (let index = 1; index < uniqueDates.length; index += 1) {
+    const previousDate = parseDateKey(uniqueDates[index - 1]);
+    const currentDate = parseDateKey(uniqueDates[index]);
+    const difference = Math.round((currentDate - previousDate) / 86400000);
+
+    if (difference === 1) {
+      runningStreak += 1;
+      longestStreak = Math.max(longestStreak, runningStreak);
+    } else {
+      runningStreak = 1;
+    }
+  }
+
+  const todayKey = toDateKey(new Date());
+  const yesterdayKey = toDateKey(addDays(new Date(), -1));
+  const latestDate = uniqueDates[uniqueDates.length - 1];
+  let currentStreak = 0;
+
+  if (latestDate === todayKey || latestDate === yesterdayKey) {
+    currentStreak = 1;
+
+    for (let index = uniqueDates.length - 1; index > 0; index -= 1) {
+      const currentDate = parseDateKey(uniqueDates[index]);
+      const previousDate = parseDateKey(uniqueDates[index - 1]);
+      const difference = Math.round((currentDate - previousDate) / 86400000);
+
+      if (difference === 1) {
+        currentStreak += 1;
+      } else {
+        break;
+      }
+    }
+  }
+
+  return { currentStreak, longestStreak };
+}
+
+function computeWeeklyWindow() {
+  const today = new Date();
+  const weekStart = startOfWeek(today);
+  const weekEnd = addDays(weekStart, 6);
+  return {
+    weekStartKey: toDateKey(weekStart),
+    weekEndKey: toDateKey(weekEnd),
+  };
+}
+
+function getProfileAnalytics(workouts, weeklyGoal) {
+  const workoutMap = buildWorkoutMap(workouts);
+  const workoutDates = workouts.map((workout) => workout.date);
+  const { currentStreak, longestStreak } = calculateStreaks(workoutDates);
+  const { weekStartKey, weekEndKey } = computeWeeklyWindow();
+  const workoutsThisWeek = workouts.filter(
+    (workout) => workout.date >= weekStartKey && workout.date <= weekEndKey
+  );
+  const lastWorkoutDate = workouts[0]?.date || "";
+
+  return {
+    workoutMap,
+    heatmapDays: buildHeatmapDays(workoutMap),
+    currentStreak,
+    longestStreak,
+    workoutsThisWeekCount: workoutsThisWeek.length,
+    lastWorkoutDate,
+    recentWorkouts: workouts.slice(0, 5),
+    weeklyGoalProgress: Math.min(
+      100,
+      Math.round((workoutsThisWeek.length / Math.max(weeklyGoal, 1)) * 100)
+    ),
+  };
+}
+
 function toFormSettings(settings) {
+  const normalizedWeeklyGoal = Number(settings?.weeklyGoal);
   return {
     preferredUnit: settings?.preferredUnit || DEFAULT_SETTINGS.preferredUnit,
     displayName: settings?.displayName || "",
@@ -283,6 +478,10 @@ function toFormSettings(settings) {
         ? ""
         : String(settings.bodyWeight),
     bodyWeightUnit: settings?.bodyWeightUnit || settings?.preferredUnit || DEFAULT_SETTINGS.bodyWeightUnit,
+    weeklyGoal:
+      Number.isInteger(normalizedWeeklyGoal) && normalizedWeeklyGoal >= 1
+        ? normalizedWeeklyGoal
+        : DEFAULT_SETTINGS.weeklyGoal,
     remindersEnabled: Boolean(settings?.remindersEnabled),
     reminderTime: settings?.reminderTime || DEFAULT_SETTINGS.reminderTime,
   };
@@ -1127,12 +1326,23 @@ function Profile({ token }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [stats, setStats] = useState({
-    workoutCount: 0,
+  const [profileData, setProfileData] = useState({
+    workouts: [],
     exerciseCount: 0,
     settings: DEFAULT_SETTINGS,
   });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    displayName: "",
+    bodyWeight: "",
+    preferredUnit: "lb",
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [goalDraft, setGoalDraft] = useState(DEFAULT_SETTINGS.weeklyGoal);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [selectedHeatmapDate, setSelectedHeatmapDate] = useState("");
   const email = getEmailFromToken(token);
 
   useEffect(() => {
@@ -1150,11 +1360,20 @@ function Profile({ token }) {
         ]);
 
         if (!ignore) {
-          setStats({
-            workoutCount: workouts?.workouts?.length ?? 0,
+          const normalizedSettings = toFormSettings(settings);
+          const workoutList = workouts?.workouts ?? [];
+          setProfileData({
+            workouts: workoutList,
             exerciseCount: prepareExercises(exercises?.exercises ?? []).length,
-            settings: toFormSettings(settings),
+            settings: normalizedSettings,
           });
+          setProfileDraft({
+            displayName: normalizedSettings.displayName,
+            bodyWeight: normalizedSettings.bodyWeight,
+            preferredUnit: normalizedSettings.preferredUnit,
+          });
+          setGoalDraft(normalizedSettings.weeklyGoal);
+          setSelectedHeatmapDate(workoutList[0]?.date || toDateKey(new Date()));
         }
       } catch (loadError) {
         if (!ignore) {
@@ -1174,6 +1393,100 @@ function Profile({ token }) {
     };
   }, [navigate, refreshKey, token]);
 
+  const analytics = getProfileAnalytics(
+    profileData.workouts,
+    profileData.settings.weeklyGoal
+  );
+  const workoutsForSelectedDate =
+    analytics.workoutMap.get(selectedHeatmapDate) || [];
+
+  function updateProfileDraft(field, value) {
+    setProfileDraft((current) => ({ ...current, [field]: value }));
+    setProfileMessage("");
+  }
+
+  function cancelProfileEdit() {
+    setEditingProfile(false);
+    setProfileDraft({
+      displayName: profileData.settings.displayName,
+      bodyWeight: profileData.settings.bodyWeight,
+      preferredUnit: profileData.settings.preferredUnit,
+    });
+  }
+
+  async function saveProfileEdit() {
+    try {
+      setProfileSaving(true);
+      setError("");
+      const savedSettings = await saveSettingsRequest(token, navigate, {
+        displayName: profileDraft.displayName,
+        bodyWeight:
+          profileDraft.bodyWeight === "" ? null : Number(profileDraft.bodyWeight),
+        bodyWeightUnit: profileDraft.preferredUnit,
+        preferredUnit: profileDraft.preferredUnit,
+      });
+
+      if (!savedSettings) {
+        return;
+      }
+
+      const normalizedSettings = toFormSettings(savedSettings);
+      setProfileData((current) => ({
+        ...current,
+        settings: normalizedSettings,
+      }));
+      setProfileDraft({
+        displayName: normalizedSettings.displayName,
+        bodyWeight: normalizedSettings.bodyWeight,
+        preferredUnit: normalizedSettings.preferredUnit,
+      });
+      setEditingProfile(false);
+      setProfileMessage("Profile updated.");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function saveWeeklyGoal() {
+    const nextGoal = Number(goalDraft);
+    if (!Number.isInteger(nextGoal) || nextGoal < 1 || nextGoal > 14) {
+      setError("Weekly goal must be a whole number between 1 and 14.");
+      return;
+    }
+
+    try {
+      setGoalSaving(true);
+      setError("");
+      setProfileMessage("");
+      const savedSettings = await saveSettingsRequest(token, navigate, {
+        weeklyGoal: nextGoal,
+      });
+
+      if (!savedSettings) {
+        return;
+      }
+
+      const normalizedSettings = toFormSettings({
+        ...profileData.settings,
+        ...savedSettings,
+        weeklyGoal: nextGoal,
+      });
+      setProfileData((current) => ({
+        ...current,
+        settings: normalizedSettings,
+      }));
+      setGoalDraft(nextGoal);
+      setProfileMessage("Weekly goal updated.");
+      setRefreshKey((value) => value + 1);
+    } catch (saveError) {
+      setError(saveError.message || "Failed to save weekly goal.");
+    } finally {
+      setGoalSaving(false);
+    }
+  }
+
   return (
     <div className="pageWrap">
       <div className="row">
@@ -1188,18 +1501,56 @@ function Profile({ token }) {
       </div>
 
       {error ? <div className="errorBanner">{error}</div> : null}
+      {profileMessage ? <div className="flashMessage">{profileMessage}</div> : null}
       {loading ? (
         <div className="subtle">Loading…</div>
       ) : (
         <div className="panelStack">
-          <section className="panel">
-            <div className="sectionTitle">Account Overview</div>
-            <div className="statGrid">
+          <section className="panel profileHero">
+            <div className="row profileHeroHeader">
+              <div>
+                <div className="sectionTitle">Account Overview</div>
+                <div className="helperText">
+                  A quick snapshot of your account, progress, and current workout habits.
+                </div>
+              </div>
+              {editingProfile ? (
+                <div className="profileEditActions">
+                  <button className="ghostBtn" onClick={cancelProfileEdit}>
+                    Cancel
+                  </button>
+                  <button
+                    className="primaryBtn compactActionBtn"
+                    onClick={saveProfileEdit}
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              ) : (
+                <button className="ghostBtn" onClick={() => setEditingProfile(true)}>
+                  Edit
+                </button>
+              )}
+            </div>
+
+            <div className="statGrid statGridWide">
               <div className="statCard">
                 <div className="statLabel">Display Name</div>
-                <div className="statValue">
-                  {stats.settings.displayName || email || "Unknown"}
-                </div>
+                {editingProfile ? (
+                  <input
+                    className="fieldInput"
+                    value={profileDraft.displayName}
+                    onChange={(event) =>
+                      updateProfileDraft("displayName", event.target.value)
+                    }
+                    placeholder="Your name"
+                  />
+                ) : (
+                  <div className="statValue">
+                    {profileData.settings.displayName || email || "Unknown"}
+                  </div>
+                )}
               </div>
               <div className="statCard">
                 <div className="statLabel">Email</div>
@@ -1207,26 +1558,204 @@ function Profile({ token }) {
               </div>
               <div className="statCard">
                 <div className="statLabel">Logged Workouts</div>
-                <div className="statValue">{stats.workoutCount}</div>
+                <div className="statValue">{profileData.workouts.length}</div>
               </div>
               <div className="statCard">
                 <div className="statLabel">Body Weight</div>
-                <div className="statValue">
-                  {stats.settings.bodyWeight
-                    ? `${stats.settings.bodyWeight} ${stats.settings.bodyWeightUnit}`
-                    : "Not set"}
-                </div>
+                {editingProfile ? (
+                  <input
+                    className="fieldInput"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={profileDraft.bodyWeight}
+                    onChange={(event) =>
+                      updateProfileDraft("bodyWeight", event.target.value)
+                    }
+                    placeholder="Optional"
+                  />
+                ) : (
+                  <div className="statValue">
+                    {profileData.settings.bodyWeight
+                      ? `${profileData.settings.bodyWeight} ${profileData.settings.bodyWeightUnit}`
+                      : "Not set"}
+                  </div>
+                )}
               </div>
               <div className="statCard">
                 <div className="statLabel">Available Exercises</div>
-                <div className="statValue">{stats.exerciseCount}</div>
+                <div className="statValue">{profileData.exerciseCount}</div>
               </div>
               <div className="statCard">
                 <div className="statLabel">Preferred Unit</div>
-                <div className="statValue">{stats.settings.preferredUnit.toUpperCase()}</div>
+                {editingProfile ? (
+                  <div className="segmentedControl compactSegments">
+                    {["lb", "kg"].map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        className={`segmentBtn${
+                          profileDraft.preferredUnit === unit ? " active" : ""
+                        }`}
+                        onClick={() => updateProfileDraft("preferredUnit", unit)}
+                      >
+                        {unit.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="statValue">
+                    {profileData.settings.preferredUnit.toUpperCase()}
+                  </div>
+                )}
               </div>
             </div>
           </section>
+
+          <div className="profileDashboardGrid">
+            <section className="panel">
+              <div className="sectionTitle">This Week</div>
+              <div className="summaryGrid">
+                <div className="summaryCard">
+                  <div className="statLabel">Workouts this week</div>
+                  <div className="summaryValue">{analytics.workoutsThisWeekCount}</div>
+                </div>
+                <div className="summaryCard">
+                  <div className="statLabel">Current streak</div>
+                  <div className="summaryValue">{analytics.currentStreak}</div>
+                </div>
+                <div className="summaryCard">
+                  <div className="statLabel">Longest streak</div>
+                  <div className="summaryValue">{analytics.longestStreak}</div>
+                </div>
+                <div className="summaryCard">
+                  <div className="statLabel">Last workout</div>
+                  <div className="summaryValue summaryValueDate">
+                    {formatDisplayDate(analytics.lastWorkoutDate)}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="row">
+                <div>
+                  <div className="sectionTitle">Weekly Goal</div>
+                  <div className="helperText">
+                    Stay on track with a target number of workouts per week.
+                  </div>
+                </div>
+                <div className="goalValue">
+                  {analytics.workoutsThisWeekCount}/{profileData.settings.weeklyGoal}
+                </div>
+              </div>
+
+              <div className="goalProgressTrack">
+                <div
+                  className="goalProgressFill"
+                  style={{ width: `${analytics.weeklyGoalProgress}%` }}
+                />
+              </div>
+
+              <div className="goalControls">
+                <label className="settingsField goalField">
+                  Weekly goal
+                  <input
+                    className="fieldInput"
+                    type="number"
+                    min="1"
+                    max="14"
+                    value={goalDraft}
+                    onChange={(event) => setGoalDraft(event.target.value)}
+                  />
+                </label>
+                <button className="ghostBtn" onClick={saveWeeklyGoal} disabled={goalSaving}>
+                  {goalSaving ? "Saving..." : "Save Goal"}
+                </button>
+              </div>
+            </section>
+
+            <section className="panel profileWideCard">
+              <div className="sectionTitle">Workout Calendar</div>
+              <div className="helperText">
+                Last 12 weeks. Darker cells mean more workouts on that day.
+              </div>
+              <div className="heatmapLegend">
+                <span>0</span>
+                <div className="heatLegendSwatch heatLevel0" />
+                <div className="heatLegendSwatch heatLevel1" />
+                <div className="heatLegendSwatch heatLevel2" />
+                <span>2+</span>
+              </div>
+              <div className="heatmapGrid">
+                {analytics.heatmapDays.map((day) => (
+                  <button
+                    key={day.date}
+                    type="button"
+                    className={`heatmapCell heatLevel${Math.min(day.count, 2)}${
+                      selectedHeatmapDate === day.date ? " active" : ""
+                    }`}
+                    onClick={() => setSelectedHeatmapDate(day.date)}
+                    title={`${formatDisplayDate(day.date)}: ${day.count} workout${
+                      day.count === 1 ? "" : "s"
+                    }`}
+                  >
+                    <span className="srOnly">
+                      {day.date} {day.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="dayWorkoutPanel">
+                <div className="sectionTitle">
+                  {selectedHeatmapDate
+                    ? `Workouts on ${formatDisplayDate(selectedHeatmapDate)}`
+                    : "Select a day"}
+                </div>
+                {workoutsForSelectedDate.length === 0 ? (
+                  <div className="subtle">No workouts logged for that day.</div>
+                ) : (
+                  <div className="miniList">
+                    {workoutsForSelectedDate.map((workout) => (
+                      <button
+                        key={workout.id}
+                        type="button"
+                        className="miniListItem"
+                        onClick={() => setSelectedHeatmapDate(workout.date)}
+                      >
+                        <span>{workout.title}</span>
+                        <span>{workout.exerciseCount} exercises</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="sectionTitle">Recent Workouts</div>
+              {analytics.recentWorkouts.length === 0 ? (
+                <div className="subtle">No workouts yet.</div>
+              ) : (
+                <div className="miniList">
+                  {analytics.recentWorkouts.map((workout) => (
+                    <button
+                      key={workout.id}
+                      type="button"
+                      className="miniListItem"
+                      onClick={() => setSelectedHeatmapDate(workout.date)}
+                    >
+                      <span>
+                        <strong>{workout.title}</strong>
+                      </span>
+                      <span>{formatMonthDay(workout.date)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       )}
     </div>
@@ -1295,39 +1824,24 @@ function Settings({ token }) {
       setSaving(true);
       setError("");
       setSuccessMessage("");
-
-      const response = await fetch(`${API}/api/settings`, {
-        method: "PUT",
-        headers: addAuthHeader(token, {
-          "Content-Type": "application/json",
-        }),
-        body: JSON.stringify({
-          preferredUnit: settings.preferredUnit,
-          displayName: settings.displayName,
-          bodyWeight: settings.bodyWeight === "" ? null : Number(settings.bodyWeight),
-          bodyWeightUnit: settings.bodyWeightUnit,
-          remindersEnabled: settings.remindersEnabled,
-          reminderTime: settings.reminderTime,
-        }),
+      const savedSettings = await saveSettingsRequest(token, navigate, {
+        preferredUnit: settings.preferredUnit,
+        displayName: settings.displayName,
+        bodyWeight: settings.bodyWeight === "" ? null : Number(settings.bodyWeight),
+        bodyWeightUnit: settings.bodyWeightUnit,
+        weeklyGoal: Number(settings.weeklyGoal),
+        remindersEnabled: settings.remindersEnabled,
+        reminderTime: settings.reminderTime,
       });
 
-      if (response.status === 401) {
-        alert("Session expired. Please log in again.");
-        navigate("/login");
+      if (!savedSettings) {
         return;
       }
 
-      if (!response.ok) {
-        const message = await readErrorMessage(response, "Failed to save settings.");
-        setError(message);
-        return;
-      }
-
-      const savedSettings = await response.json();
       setSettings(toFormSettings(savedSettings));
       setSuccessMessage("Settings saved.");
-    } catch {
-      setError("Failed to save settings. Unable to reach the API.");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to save settings. Unable to reach the API.");
     } finally {
       setSaving(false);
     }
@@ -1465,6 +1979,22 @@ function Settings({ token }) {
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="panel">
+            <div className="sectionTitle">Weekly Goal</div>
+            <div className="helperText">Set the number of workouts you want to complete each week.</div>
+            <label className="settingsField">
+              Workouts per week
+              <input
+                className="fieldInput"
+                type="number"
+                min="1"
+                max="14"
+                value={settings.weeklyGoal}
+                onChange={(event) => updateSettings("weeklyGoal", event.target.value)}
+              />
+            </label>
           </section>
 
           <section className="panel">

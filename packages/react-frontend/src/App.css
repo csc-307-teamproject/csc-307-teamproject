@@ -491,6 +491,10 @@ body {
   background: rgba(15, 17, 21, 0.35);
 }
 
+.statGridWide {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .statLabel {
   color: var(--muted);
   font-size: 14px;
@@ -501,6 +505,199 @@ body {
   font-size: 28px;
   font-weight: 700;
   word-break: break-word;
+}
+
+.profileHero {
+  display: grid;
+  gap: 18px;
+}
+
+.profileHeroHeader {
+  align-items: flex-start;
+}
+
+.profileEditActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.compactActionBtn {
+  width: auto;
+  min-width: 120px;
+  padding: 12px 18px;
+}
+
+.profileDashboardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.profileWideCard {
+  grid-column: 1 / -1;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.summaryCard {
+  border: 1px solid rgba(42, 47, 58, 0.75);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(15, 17, 21, 0.35);
+}
+
+.summaryValue {
+  margin-top: 10px;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.summaryValueDate {
+  font-size: clamp(18px, 2.4vw, 26px);
+  line-height: 1.2;
+}
+
+.goalValue {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.goalProgressTrack {
+  width: 100%;
+  height: 16px;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  border: 1px solid rgba(42, 47, 58, 0.7);
+}
+
+.goalProgressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(31, 122, 82, 0.92), rgba(66, 199, 132, 0.92));
+  transition: width 180ms ease;
+}
+
+.goalControls {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.goalField {
+  flex: 1;
+}
+
+.heatmapLegend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.heatLegendSwatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(42, 47, 58, 0.8);
+}
+
+.heatmapGrid {
+  display: grid;
+  grid-template-columns: repeat(21, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.heatmapCell {
+  aspect-ratio: 1;
+  width: 100%;
+  min-height: 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(42, 47, 58, 0.8);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  padding: 0;
+}
+
+.heatmapCell:hover,
+.heatmapCell.active {
+  border-color: rgba(243, 246, 255, 0.75);
+  transform: translateY(-1px);
+}
+
+.heatLevel0 {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.heatLevel1 {
+  background: rgba(31, 122, 82, 0.35);
+}
+
+.heatLevel2 {
+  background: rgba(31, 122, 82, 0.88);
+}
+
+.dayWorkoutPanel {
+  margin-top: 22px;
+  border-top: 1px solid rgba(42, 47, 58, 0.7);
+  padding-top: 18px;
+}
+
+.miniList {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.miniListItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(42, 47, 58, 0.75);
+  background: rgba(15, 17, 21, 0.32);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.miniListItem:hover {
+  border-color: rgba(31, 122, 82, 0.55);
+  background: rgba(31, 122, 82, 0.08);
+}
+
+.miniListItem span:last-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .bottomNav {
@@ -588,6 +785,14 @@ body {
   .timerCard {
     min-width: 0;
   }
+
+  .profileDashboardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .heatmapGrid {
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -607,7 +812,8 @@ body {
   .listItem,
   .fieldGrid,
   .statGrid,
-  .inlineFields {
+  .inlineFields,
+  .summaryGrid {
     grid-template-columns: 1fr;
   }
 
@@ -636,5 +842,25 @@ body {
 
   .timerValue {
     font-size: 34px;
+  }
+
+  .profileEditActions,
+  .goalControls,
+  .miniListItem {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .goalValue {
+    font-size: 24px;
+  }
+
+  .heatmapGrid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .heatmapCell {
+    min-height: 28px;
   }
 }

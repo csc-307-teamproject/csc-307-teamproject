@@ -17,6 +17,14 @@ const PRODUCTION_API =
   "https://csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net";
 const API = resolveApiBase();
 const TOKEN_KEY = "auth_token";
+const DEFAULT_SETTINGS = {
+  preferredUnit: "lb",
+  displayName: "",
+  bodyWeight: "",
+  bodyWeightUnit: "lb",
+  remindersEnabled: false,
+  reminderTime: "18:00",
+};
 const WORKOUT_PRESETS = [
   "Upper Body",
   "Lower Body",
@@ -115,7 +123,16 @@ function RequireAuth({ token, children }) {
 
 async function readErrorMessage(response, fallbackMessage) {
   const text = await response.text().catch(() => "");
-  return text || fallbackMessage;
+  if (!text) {
+    return fallbackMessage;
+  }
+
+  try {
+    const payload = JSON.parse(text);
+    return payload?.error || fallbackMessage;
+  } catch {
+    return text;
+  }
 }
 
 async function fetchJson(url, token, navigate, fallbackMessage) {
@@ -255,6 +272,20 @@ function formatDuration(seconds) {
   const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
   const secs = String(seconds % 60).padStart(2, "0");
   return `${hours}:${minutes}:${secs}`;
+}
+
+function toFormSettings(settings) {
+  return {
+    preferredUnit: settings?.preferredUnit || DEFAULT_SETTINGS.preferredUnit,
+    displayName: settings?.displayName || "",
+    bodyWeight:
+      settings?.bodyWeight === null || settings?.bodyWeight === undefined
+        ? ""
+        : String(settings.bodyWeight),
+    bodyWeightUnit: settings?.bodyWeightUnit || settings?.preferredUnit || DEFAULT_SETTINGS.bodyWeightUnit,
+    remindersEnabled: Boolean(settings?.remindersEnabled),
+    reminderTime: settings?.reminderTime || DEFAULT_SETTINGS.reminderTime,
+  };
 }
 
 function Home() {
@@ -1099,6 +1130,7 @@ function Profile({ token }) {
   const [stats, setStats] = useState({
     workoutCount: 0,
     exerciseCount: 0,
+    settings: DEFAULT_SETTINGS,
   });
   const [refreshKey, setRefreshKey] = useState(0);
   const email = getEmailFromToken(token);
@@ -1111,15 +1143,17 @@ function Profile({ token }) {
       setError("");
 
       try {
-        const [workouts, exercises] = await Promise.all([
+        const [workouts, exercises, settings] = await Promise.all([
           fetchJson(`${API}/api/workouts`, token, navigate, "Failed to load workouts."),
           fetchJson(`${API}/api/exercises`, token, navigate, "Failed to load exercises."),
+          fetchJson(`${API}/api/settings`, token, navigate, "Failed to load settings."),
         ]);
 
         if (!ignore) {
           setStats({
             workoutCount: workouts?.workouts?.length ?? 0,
             exerciseCount: prepareExercises(exercises?.exercises ?? []).length,
+            settings: toFormSettings(settings),
           });
         }
       } catch (loadError) {
@@ -1162,6 +1196,12 @@ function Profile({ token }) {
             <div className="sectionTitle">Account Overview</div>
             <div className="statGrid">
               <div className="statCard">
+                <div className="statLabel">Display Name</div>
+                <div className="statValue">
+                  {stats.settings.displayName || email || "Unknown"}
+                </div>
+              </div>
+              <div className="statCard">
                 <div className="statLabel">Email</div>
                 <div className="statValue">{email || "Unknown"}</div>
               </div>
@@ -1170,12 +1210,20 @@ function Profile({ token }) {
                 <div className="statValue">{stats.workoutCount}</div>
               </div>
               <div className="statCard">
+                <div className="statLabel">Body Weight</div>
+                <div className="statValue">
+                  {stats.settings.bodyWeight
+                    ? `${stats.settings.bodyWeight} ${stats.settings.bodyWeightUnit}`
+                    : "Not set"}
+                </div>
+              </div>
+              <div className="statCard">
                 <div className="statLabel">Available Exercises</div>
                 <div className="statValue">{stats.exerciseCount}</div>
               </div>
               <div className="statCard">
-                <div className="statLabel">Status</div>
-                <div className="statValue">Active</div>
+                <div className="statLabel">Preferred Unit</div>
+                <div className="statValue">{stats.settings.preferredUnit.toUpperCase()}</div>
               </div>
             </div>
           </section>
@@ -1185,19 +1233,322 @@ function Profile({ token }) {
   );
 }
 
-function Settings() {
+function Settings({ token }) {
+  const navigate = useNavigate();
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSettings() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const data = await fetchJson(
+          `${API}/api/settings`,
+          token,
+          navigate,
+          "Failed to load settings."
+        );
+
+        if (!ignore && data) {
+          setSettings(toFormSettings(data));
+        }
+      } catch (loadError) {
+        if (!ignore) {
+          setError(loadError.message || "Failed to load settings.");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadSettings();
+
+    return () => {
+      ignore = true;
+    };
+  }, [navigate, token]);
+
+  function updateSettings(field, value) {
+    setSettings((current) => ({ ...current, [field]: value }));
+    setSuccessMessage("");
+    setError("");
+  }
+
+  async function saveSettings() {
+    try {
+      setSaving(true);
+      setError("");
+      setSuccessMessage("");
+
+      const response = await fetch(`${API}/api/settings`, {
+        method: "PUT",
+        headers: addAuthHeader(token, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          preferredUnit: settings.preferredUnit,
+          displayName: settings.displayName,
+          bodyWeight: settings.bodyWeight === "" ? null : Number(settings.bodyWeight),
+          bodyWeightUnit: settings.bodyWeightUnit,
+          remindersEnabled: settings.remindersEnabled,
+          reminderTime: settings.reminderTime,
+        }),
+      });
+
+      if (response.status === 401) {
+        alert("Session expired. Please log in again.");
+        navigate("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await readErrorMessage(response, "Failed to save settings.");
+        setError(message);
+        return;
+      }
+
+      const savedSettings = await response.json();
+      setSettings(toFormSettings(savedSettings));
+      setSuccessMessage("Settings saved.");
+    } catch {
+      setError("Failed to save settings. Unable to reach the API.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updatePasswordField(field, value) {
+    setPasswordForm((current) => ({ ...current, [field]: value }));
+    setPasswordError("");
+    setPasswordSuccess("");
+  }
+
+  async function changePassword() {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      setPasswordError("Fill in your current and new password.");
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirmation must match.");
+      return;
+    }
+
+    try {
+      setPasswordError("");
+      setPasswordSuccess("");
+
+      const response = await fetch(`${API}/api/change-password`, {
+        method: "POST",
+        headers: addAuthHeader(token, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      if (response.status === 401) {
+        const message = await readErrorMessage(response, "Current password is incorrect.");
+        setPasswordError(message);
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await readErrorMessage(response, "Failed to change password.");
+        setPasswordError(message);
+        return;
+      }
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setPasswordSuccess("Password updated.");
+    } catch {
+      setPasswordError("Failed to change password. Unable to reach the API.");
+    }
+  }
+
   return (
     <div className="pageWrap">
       <h1 className="title">Settings</h1>
-      <div className="panelStack">
-        <section className="panel">
-          <div className="sectionTitle">Coming Soon</div>
-          <div className="subtle">
-            Settings is intentionally empty right now, but the page is in place for future account
-            and workout preferences.
-          </div>
-        </section>
+      <div className="pageIntro">
+        Manage the account preferences that shape how this app feels for each individual user.
       </div>
+
+      {error ? <div className="errorBanner">{error}</div> : null}
+      {successMessage ? <div className="flashMessage">{successMessage}</div> : null}
+
+      {loading ? (
+        <div className="subtle">Loading…</div>
+      ) : (
+        <div className="panelStack">
+          <section className="panel">
+            <div className="sectionTitle">Units</div>
+            <div className="helperText">Choose the weight unit you want the app to use by default.</div>
+            <div className="segmentedControl">
+              {["lb", "kg"].map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  className={`segmentBtn${settings.preferredUnit === unit ? " active" : ""}`}
+                  onClick={() => updateSettings("preferredUnit", unit)}
+                >
+                  {unit.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel settingsGrid">
+            <div>
+              <div className="sectionTitle">Profile Basics</div>
+              <div className="helperText">Make the app feel personal and store an optional body weight for future progress features.</div>
+            </div>
+
+            <label className="settingsField">
+              Display name
+              <input
+                className="fieldInput"
+                value={settings.displayName}
+                onChange={(event) => updateSettings("displayName", event.target.value)}
+                placeholder="Your name"
+              />
+            </label>
+
+            <div className="inlineFields">
+              <label className="settingsField">
+                Body weight
+                <input
+                  className="fieldInput"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={settings.bodyWeight}
+                  onChange={(event) => updateSettings("bodyWeight", event.target.value)}
+                  placeholder="Optional"
+                />
+              </label>
+
+              <div className="settingsField">
+                Body weight unit
+                <div className="segmentedControl compactSegments">
+                  {["lb", "kg"].map((unit) => (
+                    <button
+                      key={unit}
+                      type="button"
+                      className={`segmentBtn${settings.bodyWeightUnit === unit ? " active" : ""}`}
+                      onClick={() => updateSettings("bodyWeightUnit", unit)}
+                    >
+                      {unit.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="sectionTitle">Reminder Preference</div>
+            <div className="helperText">Even without push notifications yet, this keeps your preferred workout reminder ready.</div>
+            <label className="toggleRow">
+              <input
+                type="checkbox"
+                checked={settings.remindersEnabled}
+                onChange={(event) => updateSettings("remindersEnabled", event.target.checked)}
+              />
+              <span>Enable workout reminders</span>
+            </label>
+
+            <label className="settingsField">
+              Reminder time
+              <input
+                className="fieldInput"
+                type="time"
+                value={settings.reminderTime}
+                disabled={!settings.remindersEnabled}
+                onChange={(event) => updateSettings("reminderTime", event.target.value)}
+              />
+            </label>
+          </section>
+
+          <div className="settingsActions">
+            <button className="primaryBtn actionBtn" onClick={saveSettings} disabled={saving}>
+              {saving ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+
+          <section className="panel">
+            <div className="sectionTitle">Security</div>
+            <div className="helperText">Change your password by confirming the current one first.</div>
+            {passwordError ? <div className="errorBanner">{passwordError}</div> : null}
+            {passwordSuccess ? <div className="flashMessage">{passwordSuccess}</div> : null}
+            <div className="settingsGrid">
+              <label className="settingsField">
+                Current password
+                <input
+                  className="fieldInput"
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) =>
+                    updatePasswordField("currentPassword", event.target.value)
+                  }
+                />
+              </label>
+
+              <label className="settingsField">
+                New password
+                <input
+                  className="fieldInput"
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) => updatePasswordField("newPassword", event.target.value)}
+                />
+              </label>
+
+              <label className="settingsField">
+                Confirm new password
+                <input
+                  className="fieldInput"
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) =>
+                    updatePasswordField("confirmPassword", event.target.value)
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="settingsActions">
+              <button className="ghostBtn" onClick={changePassword}>
+                Change Password
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -1369,7 +1720,7 @@ export default function App() {
           element={
             <Layout authed={!!token} onLogout={logout}>
               <RequireAuth token={token}>
-                <Settings />
+                <Settings token={token} />
               </RequireAuth>
             </Layout>
           }

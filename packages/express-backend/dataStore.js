@@ -60,6 +60,23 @@ function createFileStore() {
       await writeJson(USERS_FILE, users);
       return user;
     },
+    async updateUserByEmail(email, updates) {
+      const users = await readJson(USERS_FILE, []);
+      const userIndex = users.findIndex(
+        (user) => user.email === email || user.username === email
+      );
+
+      if (userIndex < 0) {
+        return null;
+      }
+
+      users[userIndex] = {
+        ...users[userIndex],
+        ...updates,
+      };
+      await writeJson(USERS_FILE, users);
+      return users[userIndex];
+    },
     async listExercises() {
       const exercises = await readJson(EXERCISES_FILE, []);
       return sortExercises(exercises);
@@ -174,6 +191,14 @@ async function createMongoStore() {
       };
       await users.insertOne(record);
       return record;
+    },
+    async updateUserByEmail(email, updates) {
+      const result = await users.findOneAndUpdate(
+        { $or: [{ email }, { username: email }] },
+        { $set: updates },
+        { returnDocument: "after" }
+      );
+      return result || null;
     },
     async listExercises() {
       return exercises.find({}).sort({ name: 1 }).toArray();

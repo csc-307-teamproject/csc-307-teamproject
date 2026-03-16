@@ -21,3 +21,7 @@ packages/express-backend/.env
 
 # backend local data
 packages/express-backend/data/
+
+# cypress artifacts
+packages/react-frontend/cypress/screenshots/
+packages/react-frontend/cypress/videos/

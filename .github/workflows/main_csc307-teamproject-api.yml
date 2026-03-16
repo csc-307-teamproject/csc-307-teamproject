@@ -22,7 +22,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies (root)
-        run: npm install
+        run: npm ci
 
       - name: Build and test backend only
         run: |

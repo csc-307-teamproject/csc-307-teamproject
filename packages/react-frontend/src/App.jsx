@@ -6,6 +6,7 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./App.css";
@@ -370,6 +371,12 @@ function History({ token }) {
                     : ""}
                 </div>
               </div>
+              <button
+                className="ghostBtn compactBtn"
+                onClick={() => navigate(`/edit-workout/${workout.id}`)}
+              >
+                Edit
+              </button>
             </div>
           ))}
         </div>
@@ -780,6 +787,254 @@ function CreateWorkout({ token }) {
   );
 }
 
+function EditWorkout({ token }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [title, setTitle] = useState("");
+  const [query, setQuery] = useState("");
+  const [catalog, setCatalog] = useState([]);
+  const [selectedExercises, setSelectedExercises] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadData() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [workout, exerciseData] = await Promise.all([
+          fetchJson(`${API}/api/workouts/${id}`, token, navigate, "Failed to load workout."),
+          fetchJson(`${API}/api/exercises`, token, navigate, "Failed to load exercises."),
+        ]);
+
+        if (!ignore && workout && exerciseData) {
+          setTitle(workout.title || "");
+          setSelectedExercises(
+            (workout.exercises ?? []).map((ex) => ({
+              id: ex.id || crypto.randomUUID(),
+              exerciseId: ex.exerciseId || ex.id,
+              name: ex.name,
+              muscleGroup: ex.muscleGroup || "General",
+              sets: ex.sets || "",
+              reps: ex.reps || "",
+              weight: ex.weight || "",
+              notes: ex.notes || "",
+            }))
+          );
+          setCatalog(prepareExercises(exerciseData.exercises ?? []));
+        }
+      } catch (loadError) {
+        if (!ignore) setError(loadError.message || "Failed to load workout.");
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    void loadData();
+    return () => { ignore = true; };
+  }, [id, navigate, token]);
+
+  const filteredCatalog = catalog.filter((exercise) => {
+    const haystack = `${exercise.name} ${exercise.muscleGroup}`.toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  });
+
+  function addExercise(exercise) {
+    setSelectedExercises((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        exerciseId: exercise.id,
+        name: exercise.name,
+        muscleGroup: exercise.muscleGroup,
+        sets: "",
+        reps: "",
+        weight: "",
+        notes: "",
+      },
+    ]);
+  }
+
+  function updateExercise(entryId, field, value) {
+    setSelectedExercises((current) =>
+      current.map((ex) => (ex.id === entryId ? { ...ex, [field]: value } : ex))
+    );
+  }
+
+  function removeExercise(entryId) {
+    setSelectedExercises((current) => current.filter((ex) => ex.id !== entryId));
+  }
+
+  async function saveWorkout() {
+    if (selectedExercises.length === 0) {
+      alert("A workout must include at least one exercise.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await fetch(`${API}/api/workouts/${id}`, {
+        method: "PUT",
+        headers: addAuthHeader(token, { "Content-Type": "application/json" }),
+        body: JSON.stringify({ title: title.trim() || "Evening Workout", exercises: selectedExercises }),
+      });
+
+      if (response.status === 401) {
+        alert("Session expired. Please log in again.");
+        navigate("/login");
+        return;
+      }
+
+      if (!response.ok) {
+        const message = await readErrorMessage(response, "Failed to save workout.");
+        setError(message);
+        return;
+      }
+
+      navigate("/history", { replace: true });
+    } catch {
+      setError("Failed to save workout. Unable to reach the API.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="pageWrap"><div className="subtle">Loading…</div></div>;
+  }
+
+  return (
+    <div className="pageWrap">
+      <h1 className="title">Edit Workout</h1>
+
+      <input
+        className="searchBox"
+        placeholder="Workout title"
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+      />
+
+      {error ? <div className="errorBanner">{error}</div> : null}
+
+      <div className="builderGrid">
+        <section className="panel builderMain">
+          <div className="row">
+            <h2 className="sectionTitle">Exercises</h2>
+            <span className="countPill">
+              {selectedExercises.length} item{selectedExercises.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {selectedExercises.length === 0 ? (
+            <div className="emptyState">Add at least one exercise from the catalog.</div>
+          ) : (
+            <div className="selectedList">
+              {selectedExercises.map((exercise) => (
+                <div className="selectedCard" key={exercise.id}>
+                  <div className="row selectedHeader">
+                    <div>
+                      <div className="exerciseName">{exercise.name}</div>
+                      <div className="exerciseSub">{exercise.muscleGroup}</div>
+                    </div>
+                    <button
+                      className="ghostBtn compactBtn"
+                      onClick={() => removeExercise(exercise.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="fieldGrid">
+                    <label>
+                      Sets
+                      <input
+                        className="fieldInput"
+                        value={exercise.sets}
+                        onChange={(e) => updateExercise(exercise.id, "sets", e.target.value)}
+                        placeholder="4"
+                      />
+                    </label>
+                    <label>
+                      Reps
+                      <input
+                        className="fieldInput"
+                        value={exercise.reps}
+                        onChange={(e) => updateExercise(exercise.id, "reps", e.target.value)}
+                        placeholder="8-12"
+                      />
+                    </label>
+                    <label>
+                      Weight
+                      <input
+                        className="fieldInput"
+                        value={exercise.weight}
+                        onChange={(e) => updateExercise(exercise.id, "weight", e.target.value)}
+                        placeholder="135 lb"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="notesField">
+                    Notes
+                    <input
+                      className="fieldInput"
+                      value={exercise.notes}
+                      onChange={(e) => updateExercise(exercise.id, "notes", e.target.value)}
+                      placeholder="Tempo, rest time, or quick notes"
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="builderActions">
+            <button className="ghostBtn" onClick={() => navigate("/history")}>
+              Cancel
+            </button>
+            <button className="primaryBtn actionBtn" onClick={saveWorkout} disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </section>
+
+        <aside className="panel builderSidebar">
+          <div className="row">
+            <h2 className="sectionTitle">Exercise Catalog</h2>
+            <span className="countPill">{catalog.length}</span>
+          </div>
+
+          <input
+            className="searchBox inlineSearch"
+            placeholder="Search exercises"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+
+          {filteredCatalog.length === 0 ? (
+            <div className="emptyState">No exercises match that search.</div>
+          ) : (
+            <div className="catalogList catalogListCompact">
+              {filteredCatalog.map((exercise) => (
+                <ExerciseCatalogRow
+                  key={exercise.id}
+                  exercise={exercise}
+                  actionLabel="Add"
+                  onAction={() => addExercise(exercise)}
+                />
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 function Profile({ token }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -1003,6 +1258,17 @@ export default function App() {
             <Layout authed={!!token} onLogout={logout} showNav={false}>
               <RequireAuth token={token}>
                 <CreateWorkout token={token} />
+              </RequireAuth>
+            </Layout>
+          }
+        />
+
+        <Route
+          path="/edit-workout/:id"
+          element={
+            <Layout authed={!!token} onLogout={logout} showNav={false}>
+              <RequireAuth token={token}>
+                <EditWorkout token={token} />
               </RequireAuth>
             </Layout>
           }

@@ -100,6 +100,22 @@ function createFileStore() {
       await writeJson(WORKOUTS_FILE, store);
       return workout;
     },
+    async getWorkoutById(id, email) {
+      const store = await readJson(WORKOUTS_FILE, {});
+      const userWorkouts = store[email] ?? [];
+      return userWorkouts.find((w) => w.id === id) ?? null;
+    },
+    async updateWorkout(id, email, updates) {
+      const store = await readJson(WORKOUTS_FILE, {});
+      const current = store[email] ?? [];
+      const index = current.findIndex((w) => w.id === id);
+      if (index === -1) return null;
+      const updated = { ...current[index], ...updates };
+      current[index] = updated;
+      store[email] = sortWorkouts(current);
+      await writeJson(WORKOUTS_FILE, store);
+      return updated;
+    },
     async close() {},
   };
 }
@@ -180,6 +196,20 @@ async function createMongoStore() {
     async createWorkout(workout) {
       await workouts.insertOne(workout);
       return workout;
+    },
+    async getWorkoutById(id, email) {
+      return workouts.findOne({
+        id,
+        $or: [{ email }, { username: email }],
+      });
+    },
+    async updateWorkout(id, email, updates) {
+      const result = await workouts.findOneAndUpdate(
+        { id, $or: [{ email }, { username: email }] },
+        { $set: updates },
+        { returnDocument: "after" }
+      );
+      return result ?? null;
     },
     async close() {
       await client.close();

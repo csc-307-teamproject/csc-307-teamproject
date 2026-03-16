@@ -198,6 +198,37 @@ app.post("/api/workouts", authenticateUser, async (req, res) => {
   }
 });
 
+app.get("/api/workouts/:id", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const workout = await store.getWorkoutById(req.params.id, req.user.email);
+    if (!workout) return res.status(404).json({ error: "Workout not found" });
+    res.json(workout);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load workout" });
+  }
+});
+
+app.put("/api/workouts/:id", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const title = sanitizeText(req.body?.title, "Evening Workout");
+    const exercises = normalizeWorkoutExercises(req.body?.exercises);
+
+    if (exercises.length === 0) {
+      return res.status(400).json({ error: "A workout must include at least one exercise" });
+    }
+
+    const updated = await store.updateWorkout(req.params.id, req.user.email, { title, exercises });
+    if (!updated) return res.status(404).json({ error: "Workout not found" });
+    res.json(toPublicWorkout(updated));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update workout" });
+  }
+});
+
 app.get("/api/exercises", authenticateUser, async (req, res) => {
   try {
     const store = await getDataStore();

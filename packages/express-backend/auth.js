@@ -85,6 +85,8 @@ export function authenticateUser(req, res, next) {
   if (!token) return res.status(401).end();
 
   jwt.verify(token, process.env.TOKEN_SECRET, (error, decoded) => {
+    if (error) return res.status(401).end();
+
     const email = String(decoded?.email ?? decoded?.username ?? "")
       .trim()
       .toLowerCase();

@@ -184,6 +184,11 @@ body {
   gap: 18px;
 }
 
+.settingsGrid {
+  display: grid;
+  gap: 16px;
+}
+
 .sectionTitle,
 .authTitle {
   margin: 0;
@@ -395,14 +400,77 @@ body {
   align-items: center;
 }
 
+.settingsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .actionBtn {
   max-width: 280px;
   margin-left: auto;
 }
 
+.helperText {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.settingsField {
+  display: grid;
+  gap: 8px;
+  color: rgba(243, 246, 255, 0.82);
+  font-size: 14px;
+}
+
+.inlineFields {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.segmentedControl {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.compactSegments {
+  margin-top: 0;
+}
+
+.segmentBtn {
+  min-width: 84px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(15, 17, 21, 0.5);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.segmentBtn.active {
+  border-color: rgba(31, 122, 82, 0.65);
+  background: rgba(31, 122, 82, 0.18);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: rgba(243, 246, 255, 0.88);
+}
+
+.toggleRow input {
+  width: 18px;
+  height: 18px;
+}
+
 .statGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -528,7 +596,8 @@ body {
 
   .listItem,
   .fieldGrid,
-  .statGrid {
+  .statGrid,
+  .inlineFields {
     grid-template-columns: 1fr;
   }
 
@@ -540,6 +609,10 @@ body {
   .actionBtn {
     max-width: none;
     margin-left: 0;
+  }
+
+  .settingsActions {
+    justify-content: stretch;
   }
 
   .exerciseImg {

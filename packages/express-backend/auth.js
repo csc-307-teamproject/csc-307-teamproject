@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { getDataStore } from "./dataStore.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEFAULT_REMINDER_TIME = "18:00";
 
 function generateAccessToken(email) {
   return new Promise((resolve, reject) => {
@@ -41,7 +42,17 @@ export async function registerUser(req, res) {
     }
 
     const hashedPassword = await bcrypt.hash(pwd, 10);
-    await store.createUser({ email, username: email, passwordHash: hashedPassword });
+    await store.createUser({
+      email,
+      username: email,
+      passwordHash: hashedPassword,
+      displayName: email.split("@")[0],
+      preferredUnit: "lb",
+      bodyWeight: null,
+      bodyWeightUnit: "lb",
+      remindersEnabled: false,
+      reminderTime: DEFAULT_REMINDER_TIME,
+    });
 
     const token = await generateAccessToken(email);
     return res.status(201).send({ token });

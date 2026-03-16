@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import bcrypt from "bcrypt";
 import { authenticateUser, registerUser, loginUser } from "./auth.js";
 import { closeDataStore, getDataStore } from "./dataStore.js";
 import {
@@ -21,6 +22,14 @@ const app = express();
 const port = 8000;
 const REMOTE_EXERCISE_TARGET = 400;
 const REMOTE_EXERCISE_MINIMUM = 120;
+const DEFAULT_SETTINGS = {
+  preferredUnit: "lb",
+  displayName: "",
+  bodyWeight: null,
+  bodyWeightUnit: "lb",
+  remindersEnabled: false,
+  reminderTime: "18:00",
+};
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +44,87 @@ function isoDate(daysAgo = 0) {
 function sanitizeText(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function isValidUnit(value) {
+  return value === "lb" || value === "kg";
+}
+
+function normalizeReminderTime(value) {
+  const normalized = sanitizeText(value, DEFAULT_SETTINGS.reminderTime);
+  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(normalized)
+    ? normalized
+    : DEFAULT_SETTINGS.reminderTime;
+}
+
+function parseOptionalBodyWeight(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0 || numericValue > 1500) {
+    return null;
+  }
+
+  return Math.round(numericValue * 10) / 10;
+}
+
+function toPublicSettings(user) {
+  const bodyWeight = parseOptionalBodyWeight(user?.bodyWeight);
+  return {
+    preferredUnit: isValidUnit(user?.preferredUnit) ? user.preferredUnit : DEFAULT_SETTINGS.preferredUnit,
+    displayName: sanitizeText(user?.displayName),
+    bodyWeight,
+    bodyWeightUnit: isValidUnit(user?.bodyWeightUnit)
+      ? user.bodyWeightUnit
+      : isValidUnit(user?.preferredUnit)
+        ? user.preferredUnit
+        : DEFAULT_SETTINGS.bodyWeightUnit,
+    remindersEnabled: Boolean(user?.remindersEnabled),
+    reminderTime: normalizeReminderTime(user?.reminderTime),
+  };
+}
+
+function parseSettingsUpdate(body, currentSettings) {
+  const preferredUnit = body?.preferredUnit;
+  const bodyWeightUnit = body?.bodyWeightUnit;
+
+  if (preferredUnit !== undefined && !isValidUnit(preferredUnit)) {
+    throw new Error("Preferred unit must be 'lb' or 'kg'.");
+  }
+
+  if (bodyWeightUnit !== undefined && !isValidUnit(bodyWeightUnit)) {
+    throw new Error("Body weight unit must be 'lb' or 'kg'.");
+  }
+
+  const nextBodyWeight = parseOptionalBodyWeight(body?.bodyWeight);
+  if (
+    body?.bodyWeight !== undefined &&
+    body?.bodyWeight !== null &&
+    body?.bodyWeight !== "" &&
+    nextBodyWeight === null
+  ) {
+    throw new Error("Body weight must be a positive number.");
+  }
+
+  return {
+    displayName:
+      body?.displayName !== undefined
+        ? sanitizeText(body.displayName).slice(0, 60)
+        : currentSettings.displayName,
+    preferredUnit: preferredUnit ?? currentSettings.preferredUnit,
+    bodyWeight: body?.bodyWeight !== undefined ? nextBodyWeight : currentSettings.bodyWeight,
+    bodyWeightUnit: bodyWeightUnit ?? currentSettings.bodyWeightUnit,
+    remindersEnabled:
+      body?.remindersEnabled !== undefined
+        ? Boolean(body.remindersEnabled)
+        : currentSettings.remindersEnabled,
+    reminderTime:
+      body?.reminderTime !== undefined
+        ? normalizeReminderTime(body.reminderTime)
+        : currentSettings.reminderTime,
+  };
 }
 
 function normalizeWorkoutExercises(input) {
@@ -153,6 +243,80 @@ app.get("/api/me", authenticateUser, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to load profile" });
+  }
+});
+
+app.get("/api/settings", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const user = await store.getUserByEmail(req.user.email);
+    res.json(toPublicSettings(user));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load settings" });
+  }
+});
+
+app.put("/api/settings", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const existingUser = await store.getUserByEmail(req.user.email);
+
+    if (!existingUser) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const currentSettings = toPublicSettings(existingUser);
+    const nextSettings = parseSettingsUpdate(req.body, currentSettings);
+    const updatedUser = await store.updateUserByEmail(req.user.email, nextSettings);
+    res.json(toPublicSettings(updatedUser || { ...existingUser, ...nextSettings }));
+  } catch (err) {
+    if (err instanceof Error) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+
+    console.error(err);
+    res.status(500).json({ error: "Failed to save settings" });
+  }
+});
+
+app.post("/api/change-password", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const user = await store.getUserByEmail(req.user.email);
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const currentPassword = String(req.body?.currentPassword ?? "");
+    const newPassword = String(req.body?.newPassword ?? "");
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "Current and new password are required" });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: "New password must be at least 8 characters" });
+      return;
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      res.status(401).json({ error: "Current password is incorrect" });
+      return;
+    }
+
+    const nextHash = await bcrypt.hash(newPassword, 10);
+    await store.updateUserByEmail(req.user.email, { passwordHash: nextHash });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to change password" });
   }
 });
 

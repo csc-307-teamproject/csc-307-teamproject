@@ -13,18 +13,10 @@ https://www.figma.com/design/2c71pqTvRwcwt5LPPQOdfi/TE3?node-id=0-1&t=ozb8mNQtEz
 
 ## Architecture
 
-The system follows a client-server architecture.
+Detailed architecture documentation can be found in the `/docs` directory.
 
-* **Frontend:** React
-* **Backend:** Express.js
-* **Authentication:** JWT-based authentication
-* **Data Storage:** MongoDB
-
-The React frontend communicates with the Express backend through REST API endpoints. The backend handles authentication, workout management, and exercise data processing. Data is stored in a MongoDB database and accessed through the backend API.
-
-### UML Class Diagram
-
-![Class Diagram](docs/UMLDiagram.jpg)
+* [System Architecture](docs/architecture.md)
+* [UML Class Diagram](docs/uml-class-diagram.md)
 
 ### Sequence Diagram
 

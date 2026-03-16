@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   bodyWeight: "",
   bodyWeightUnit: "lb",
   weeklyGoal: 3,
+  avatarUrl: "",
   prBench: "",
   prSquat: "",
   prDeadlift: "",
@@ -475,6 +476,7 @@ function toFormSettings(settings) {
       Number.isInteger(normalizedWeeklyGoal) && normalizedWeeklyGoal >= 1
         ? normalizedWeeklyGoal
         : DEFAULT_SETTINGS.weeklyGoal,
+    avatarUrl: settings?.avatarUrl || "",
     prBench: settings?.prBench != null ? String(settings.prBench) : "",
     prSquat: settings?.prSquat != null ? String(settings.prSquat) : "",
     prDeadlift: settings?.prDeadlift != null ? String(settings.prDeadlift) : "",
@@ -1467,9 +1469,32 @@ function Profile({ token }) {
     }
   }
 
+  const avatarUrl = profileData.settings.avatarUrl;
+  const initials = (profileData.settings.displayName || getEmailFromToken(token) || "?")
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .slice(0, 2)
+    .join("");
+
   return (
     <div className="pageWrap">
-      <h1 className="title">Profile</h1>
+      <div className="profileTitleRow">
+        <div className="avatarCircle">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="Profile"
+              className="avatarImg"
+              onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }}
+            />
+          ) : null}
+          <span className="avatarInitials" style={{ display: avatarUrl ? "none" : "flex" }}>
+            {initials}
+          </span>
+        </div>
+        <h1 className="title">Profile</h1>
+      </div>
 
 
       {error ? <div className="errorBanner">{error}</div> : null}
@@ -1830,6 +1855,7 @@ function Settings({ token, onLogout }) {
         bodyWeight: settings.bodyWeight === "" ? null : Number(settings.bodyWeight),
         bodyWeightUnit: settings.bodyWeightUnit,
         weeklyGoal: Number(settings.weeklyGoal),
+        avatarUrl: settings.avatarUrl,
         prBench: settings.prBench,
         prSquat: settings.prSquat,
         prDeadlift: settings.prDeadlift,
@@ -1949,6 +1975,51 @@ function Settings({ token, onLogout }) {
                 placeholder="Your name"
               />
             </label>
+
+            <div className="settingsField">
+              Profile picture
+              <div className="avatarUploadRow">
+                {settings.avatarUrl ? (
+                  <img src={settings.avatarUrl} alt="Preview" className="avatarUploadPreview" />
+                ) : (
+                  <div className="avatarUploadPreview avatarUploadPlaceholder">No image</div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label className="ghostBtn compactBtn" style={{ cursor: "pointer", textAlign: "center" }}>
+                    Choose Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        const img = new Image();
+                        const objectUrl = URL.createObjectURL(file);
+                        img.onload = () => {
+                          const canvas = document.createElement("canvas");
+                          canvas.width = 128;
+                          canvas.height = 128;
+                          const ctx = canvas.getContext("2d");
+                          const size = Math.min(img.width, img.height);
+                          const offsetX = (img.width - size) / 2;
+                          const offsetY = (img.height - size) / 2;
+                          ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, 128, 128);
+                          URL.revokeObjectURL(objectUrl);
+                          updateSettings("avatarUrl", canvas.toDataURL("image/jpeg", 0.85));
+                        };
+                        img.src = objectUrl;
+                      }}
+                    />
+                  </label>
+                  {settings.avatarUrl ? (
+                    <button className="ghostBtn compactBtn" onClick={() => updateSettings("avatarUrl", "")}>
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
 
             <div className="inlineFields">
               <label className="settingsField">

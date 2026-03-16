@@ -84,6 +84,7 @@ function toPublicSettings(user) {
         ? user.preferredUnit
         : DEFAULT_SETTINGS.bodyWeightUnit,
     weeklyGoal: parseWeeklyGoal(user?.weeklyGoal) ?? DEFAULT_SETTINGS.weeklyGoal,
+    avatarUrl: sanitizeText(user?.avatarUrl),
     prBench: user?.prBench != null ? String(user.prBench) : "",
     prSquat: user?.prSquat != null ? String(user.prSquat) : "",
     prDeadlift: user?.prDeadlift != null ? String(user.prDeadlift) : "",
@@ -126,6 +127,7 @@ function parseSettingsUpdate(body, currentSettings) {
     bodyWeight: body?.bodyWeight !== undefined ? nextBodyWeight : currentSettings.bodyWeight,
     bodyWeightUnit: bodyWeightUnit ?? currentSettings.bodyWeightUnit,
     weeklyGoal: weeklyGoal !== undefined ? parseWeeklyGoal(weeklyGoal) : currentSettings.weeklyGoal,
+    avatarUrl: body?.avatarUrl !== undefined ? String(body.avatarUrl ?? "") : currentSettings.avatarUrl,
     prBench: body?.prBench !== undefined ? String(body.prBench) : currentSettings.prBench,
     prSquat: body?.prSquat !== undefined ? String(body.prSquat) : currentSettings.prSquat,
     prDeadlift: body?.prDeadlift !== undefined ? String(body.prDeadlift) : currentSettings.prDeadlift,

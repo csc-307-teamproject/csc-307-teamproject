@@ -116,6 +116,16 @@ function createFileStore() {
       await writeJson(WORKOUTS_FILE, store);
       return updated;
     },
+    async deleteWorkout(id, email) {
+      const store = await readJson(WORKOUTS_FILE, {});
+      const current = store[email] ?? [];
+      const index = current.findIndex((w) => w.id === id);
+      if (index === -1) return false;
+      current.splice(index, 1);
+      store[email] = current;
+      await writeJson(WORKOUTS_FILE, store);
+      return true;
+    },
     async close() {},
   };
 }
@@ -210,6 +220,13 @@ async function createMongoStore() {
         { returnDocument: "after" }
       );
       return result ?? null;
+    },
+    async deleteWorkout(id, email) {
+      const result = await workouts.deleteOne({
+        id,
+        $or: [{ email }, { username: email }],
+      });
+      return result.deletedCount > 0;
     },
     async close() {
       await client.close();

@@ -210,6 +210,16 @@ body {
   border-bottom: 0;
 }
 
+.historyActions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+
+.historyActions .compactBtn {
+  min-width: 80px;
+}
+
 .date {
   font-variant-numeric: tabular-nums;
 }

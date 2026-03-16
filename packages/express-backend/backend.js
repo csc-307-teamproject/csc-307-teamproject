@@ -229,6 +229,18 @@ app.put("/api/workouts/:id", authenticateUser, async (req, res) => {
   }
 });
 
+app.delete("/api/workouts/:id", authenticateUser, async (req, res) => {
+  try {
+    const store = await getDataStore();
+    const deleted = await store.deleteWorkout(req.params.id, req.user.email);
+    if (!deleted) return res.status(404).json({ error: "Workout not found" });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete workout" });
+  }
+});
+
 app.get("/api/exercises", authenticateUser, async (req, res) => {
   try {
     const store = await getDataStore();

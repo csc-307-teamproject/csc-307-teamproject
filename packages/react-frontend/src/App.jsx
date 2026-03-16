@@ -304,6 +304,33 @@ function History({ token }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [deletingId, setDeletingId] = useState(null);
+
+  async function deleteWorkout(id) {
+    if (!window.confirm("Delete this workout? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      const response = await fetch(`${API}/api/workouts/${id}`, {
+        method: "DELETE",
+        headers: addAuthHeader(token),
+      });
+      if (response.status === 401) {
+        alert("Session expired. Please log in again.");
+        navigate("/login");
+        return;
+      }
+      if (!response.ok) {
+        const message = await readErrorMessage(response, "Failed to delete workout.");
+        setError(message);
+        return;
+      }
+      setWorkouts((current) => current.filter((w) => w.id !== id));
+    } catch {
+      setError("Failed to delete workout. Unable to reach the API.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -371,12 +398,21 @@ function History({ token }) {
                     : ""}
                 </div>
               </div>
-              <button
-                className="ghostBtn compactBtn"
-                onClick={() => navigate(`/edit-workout/${workout.id}`)}
-              >
-                Edit
-              </button>
+              <div className="historyActions">
+                <button
+                  className="ghostBtn compactBtn"
+                  onClick={() => navigate(`/edit-workout/${workout.id}`)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="ghostBtn compactBtn"
+                  onClick={() => deleteWorkout(workout.id)}
+                  disabled={deletingId === workout.id}
+                >
+                  {deletingId === workout.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             </div>
           ))}
         </div>

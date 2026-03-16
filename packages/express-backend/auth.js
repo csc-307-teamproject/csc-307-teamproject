@@ -50,6 +50,7 @@ export async function registerUser(req, res) {
       preferredUnit: "lb",
       bodyWeight: null,
       bodyWeightUnit: "lb",
+      weeklyGoal: 3,
       remindersEnabled: false,
       reminderTime: DEFAULT_REMINDER_TIME,
     });

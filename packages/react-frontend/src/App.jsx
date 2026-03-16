@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import Login from "./Login.jsx";
 import logo from "./assets/dynamicfitlogo.png";
+import spongebobLifting from "./assets/spongebob-lifting.gif";
 
 const PRODUCTION_API =
   "https://csc307-teamproject-api-hrcvbdgdd9eyhrcb.eastus2-01.azurewebsites.net";
@@ -1319,6 +1320,7 @@ function Profile({ token }) {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
+  const [profileImage, setProfileImage] = useState(spongebobLifting);
   const [goalDraft, setGoalDraft] = useState(DEFAULT_SETTINGS.weeklyGoal);
   const [goalSaving, setGoalSaving] = useState(false);
   const [selectedHeatmapDate, setSelectedHeatmapDate] = useState("");
@@ -1372,6 +1374,14 @@ function Profile({ token }) {
     };
   }, [navigate, token]);
 
+  useEffect(() => {
+    return () => {
+      if (profileImage?.startsWith?.("blob:")) {
+        URL.revokeObjectURL(profileImage);
+      }
+    };
+  }, [profileImage]);
+
   const analytics = getProfileAnalytics(
     profileData.workouts,
     profileData.settings.weeklyGoal
@@ -1391,6 +1401,22 @@ function Profile({ token }) {
       bodyWeight: profileData.settings.bodyWeight,
       preferredUnit: profileData.settings.preferredUnit,
     });
+  }
+
+  function handleProfileImageChange(event) {
+    const nextFile = event.target.files?.[0];
+    if (!nextFile) {
+      return;
+    }
+
+    const nextImageUrl = URL.createObjectURL(nextFile);
+    setProfileImage((currentImage) => {
+      if (currentImage?.startsWith?.("blob:")) {
+        URL.revokeObjectURL(currentImage);
+      }
+      return nextImageUrl;
+    });
+    setProfileMessage("Profile picture updated for this session.");
   }
 
   async function saveProfileEdit() {
@@ -1478,10 +1504,28 @@ function Profile({ token }) {
         <div className="panelStack">
           <section className="panel profileHero">
             <div className="row profileHeroHeader">
-              <div>
-                <div className="sectionTitle">Account Overview</div>
-                <div className="helperText">
-                  A quick snapshot of your account, progress, and current workout habits.
+              <div className="profileHeroIntro">
+                <div>
+                  <div className="sectionTitle">Account Overview</div>
+                  <div className="helperText">
+                    A quick snapshot of your account, progress, and current workout habits.
+                  </div>
+                </div>
+                <div className="profileAvatarPanel">
+                  <img
+                    className="profileAvatar"
+                    src={profileImage}
+                    alt="Profile avatar"
+                  />
+                  <label className="ghostBtn profileUploadBtn">
+                    Add Picture
+                    <input
+                      className="srOnlyInput"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageChange}
+                    />
+                  </label>
                 </div>
               </div>
               {editingProfile ? (

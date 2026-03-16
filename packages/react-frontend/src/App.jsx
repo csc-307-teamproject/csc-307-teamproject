@@ -305,6 +305,11 @@ function History({ token }) {
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [deletingId, setDeletingId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
+  function toggleOptions(id) {
+    setExpandedId((current) => (current === id ? null : id));
+  }
 
   async function deleteWorkout(id) {
     if (!window.confirm("Delete this workout? This cannot be undone.")) return;
@@ -388,7 +393,12 @@ function History({ token }) {
         <div className="list">
           {workouts.map((workout) => (
             <div className="listItem" key={workout.id}>
-              <div className="date">{workout.date}</div>
+              <div className="date">
+                {workout.date}
+                {workout.duration != null
+                  ? ` · ${formatDuration(workout.duration)}`
+                  : ""}
+              </div>
               <div className="workoutSummary">
                 <div className="workoutTitle">{workout.title}</div>
                 <div className="workoutMeta">
@@ -401,17 +411,27 @@ function History({ token }) {
               <div className="historyActions">
                 <button
                   className="ghostBtn compactBtn"
-                  onClick={() => navigate(`/edit-workout/${workout.id}`)}
+                  onClick={() => toggleOptions(workout.id)}
                 >
-                  Edit
+                  {expandedId === workout.id ? "Close" : "Options"}
                 </button>
-                <button
-                  className="ghostBtn compactBtn"
-                  onClick={() => deleteWorkout(workout.id)}
-                  disabled={deletingId === workout.id}
-                >
-                  {deletingId === workout.id ? "Deleting…" : "Delete"}
-                </button>
+                {expandedId === workout.id && (
+                  <>
+                    <button
+                      className="ghostBtn compactBtn"
+                      onClick={() => navigate(`/edit-workout/${workout.id}`)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="ghostBtn compactBtn"
+                      onClick={() => deleteWorkout(workout.id)}
+                      disabled={deletingId === workout.id}
+                    >
+                      {deletingId === workout.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -638,6 +658,7 @@ function CreateWorkout({ token }) {
         body: JSON.stringify({
           title: title.trim() || "Evening Workout",
           exercises: selectedExercises,
+          duration: elapsedSeconds,
         }),
       });
 

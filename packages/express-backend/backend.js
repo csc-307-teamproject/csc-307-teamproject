@@ -67,6 +67,7 @@ function toPublicWorkout(workout) {
   return {
     id: workout.id,
     date: workout.date,
+    duration: workout.duration || null,
     title: workout.title,
     exerciseCount: Array.isArray(workout.exercises) ? workout.exercises.length : 0,
     exerciseNames: Array.isArray(workout.exercises)
@@ -180,6 +181,8 @@ app.post("/api/workouts", authenticateUser, async (req, res) => {
       return;
     }
 
+    const duration = Number.isFinite(req.body?.duration) ? Math.round(req.body.duration) : null;
+
     const newWorkout = {
       id: crypto.randomUUID(),
       email,
@@ -187,6 +190,7 @@ app.post("/api/workouts", authenticateUser, async (req, res) => {
       date: isoDate(0),
       title,
       exercises,
+      duration,
       createdAt: new Date().toISOString(),
     };
 
